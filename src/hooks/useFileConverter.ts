@@ -171,6 +171,35 @@ export const useFileConverter = () => {
     });
   }, []);
 
+  // Reset a file to pending state (as if freshly uploaded)
+  const resetFile = useCallback((id: string) => {
+    setFiles((prev) =>
+      prev.map((f) => {
+        if (f.id === id) {
+          // Revoke old URL if exists
+          if (f.convertedUrl) {
+            URL.revokeObjectURL(f.convertedUrl);
+          }
+          // Reset to fresh state
+          return {
+            ...f,
+            status: 'pending' as const,
+            progress: 0,
+            convertedBlob: undefined,
+            convertedUrl: undefined,
+            convertedSize: undefined,
+            error: undefined,
+            qualitySettings: { ...DEFAULT_QUALITY_SETTINGS },
+            cropArea: undefined,
+            trimRange: undefined,
+            suggestedName: undefined,
+          };
+        }
+        return f;
+      })
+    );
+  }, []);
+
   const clearAllFiles = useCallback(() => {
     setFiles((prev) => {
       prev.forEach((file) => {
@@ -208,6 +237,7 @@ export const useFileConverter = () => {
     addFiles,
     convertFile,
     removeFile,
+    resetFile,
     clearAllFiles,
     downloadFile,
     updateFileName,

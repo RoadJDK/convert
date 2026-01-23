@@ -20,9 +20,9 @@ export const useVideoConverter = () => {
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
 
-    // Use single-threaded core for better browser compatibility
-    // Multi-threaded has issues with SharedArrayBuffer in some environments
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    // Use the ESM single-threaded core which doesn't require SharedArrayBuffer
+    // This version works without COOP/COEP headers
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
 
     // Helpful while debugging in-browser; harmless in prod.
     ffmpeg.on('log', ({ message }) => {
@@ -31,6 +31,7 @@ export const useVideoConverter = () => {
     });
 
     try {
+      // Load with explicit classWorkerURL to avoid worker issues
       await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
@@ -39,7 +40,10 @@ export const useVideoConverter = () => {
       return ffmpeg;
     } catch (loadError) {
       console.error('FFmpeg load error:', loadError);
-      throw new Error('FFmpeg konnte nicht geladen werden. Bitte Seite neu laden.');
+      // Reset state so user can try again
+      loadedRef.current = false;
+      ffmpegRef.current = null;
+      throw new Error('Video-Konvertierung nicht verfügbar. Versuche es mit einem Bild oder lade die Seite neu.');
     }
   }, []);
 
