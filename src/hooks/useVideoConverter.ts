@@ -315,40 +315,87 @@ export const useVideoConverter = () => {
     async (file: File, timeSeconds: number = 0): Promise<string> => {
       return new Promise((resolve, reject) => {
         const video = document.createElement('video');
-        video.preload = 'metadata';
+        video.preload = 'auto'; // Changed from 'metadata' for Safari compatibility
         video.muted = true;
         video.playsInline = true;
+        video.crossOrigin = 'anonymous';
+        
+        // Safari needs autoplay to load video data
+        video.autoplay = false;
 
         const url = URL.createObjectURL(file);
-        video.src = url;
+        
+        const cleanup = () => {
+          URL.revokeObjectURL(url);
+          video.src = '';
+          video.load();
+        };
+        
+        const captureFrame = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 360;
 
-        video.onloadedmetadata = () => {
-          video.currentTime = Math.min(timeSeconds, video.duration);
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              cleanup();
+              reject(new Error('Could not get canvas context'));
+              return;
+            }
+
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const frameDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            
+            cleanup();
+            resolve(frameDataUrl);
+          } catch (err) {
+            console.error('[extractFrame] Canvas error:', err);
+            cleanup();
+            reject(err);
+          }
+        };
+
+        let hasResolved = false;
+        
+        video.onloadeddata = () => {
+          if (hasResolved) return;
+          
+          // For first frame (timeSeconds = 0), capture immediately
+          if (timeSeconds === 0) {
+            hasResolved = true;
+            // Small delay for Safari to fully decode
+            setTimeout(captureFrame, 100);
+          } else {
+            video.currentTime = Math.min(timeSeconds, video.duration || 0);
+          }
         };
 
         video.onseeked = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+          if (hasResolved) return;
+          hasResolved = true;
+          setTimeout(captureFrame, 50);
+        };
+        
+        video.onerror = (e) => {
+          console.error('[extractFrame] Video error:', e);
+          cleanup();
+          // Don't reject - just return a placeholder
+          resolve('');
+        };
 
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            URL.revokeObjectURL(url);
-            reject(new Error('Could not get canvas context'));
-            return;
+        // Timeout fallback
+        setTimeout(() => {
+          if (!hasResolved) {
+            console.warn('[extractFrame] Timeout - using fallback');
+            hasResolved = true;
+            cleanup();
+            resolve(''); // Return empty string as fallback
           }
+        }, 5000);
 
-          ctx.drawImage(video, 0, 0);
-          const frameDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-
-          URL.revokeObjectURL(url);
-          resolve(frameDataUrl);
-        };
-
-        video.onerror = () => {
-          URL.revokeObjectURL(url);
-          reject(new Error('Failed to load video'));
-        };
+        video.src = url;
+        video.load();
       });
     },
     []
