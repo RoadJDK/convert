@@ -134,7 +134,7 @@ export const QualitySettings = ({
                 <Label className="text-xs font-medium">Hintergrund entfernen</Label>
               </div>
               <Switch
-                checked={removeBackground}
+                checked={removeBackground ?? false}
                 onCheckedChange={onRemoveBackgroundChange}
               />
             </div>
