@@ -23,6 +23,7 @@ export type Database = {
           id: string
           images_converted: number
           last_name: string
+          user_id: string | null
           videos_converted: number
         }
         Insert: {
@@ -33,6 +34,7 @@ export type Database = {
           id?: string
           images_converted?: number
           last_name: string
+          user_id?: string | null
           videos_converted?: number
         }
         Update: {
@@ -43,6 +45,7 @@ export type Database = {
           id?: string
           images_converted?: number
           last_name?: string
+          user_id?: string | null
           videos_converted?: number
         }
         Relationships: []
