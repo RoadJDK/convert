@@ -1,7 +1,6 @@
 import { useCallback, useRef } from 'react';
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
-import { QualitySettings, CropArea, TrimRange, displayedToInternalQuality } from '@/types/converter';
+import { convertMedia, webcodecsController } from '@remotion/webcodecs';
+import { QualitySettings, CropArea, TrimRange } from '@/types/converter';
 
 interface ConversionOptions {
   qualitySettings: QualitySettings;
@@ -10,175 +9,190 @@ interface ConversionOptions {
   trimRange?: TrimRange;
 }
 
+// Check if WebCodecs API is available (required for @remotion/webcodecs)
+const isWebCodecsSupported = () => {
+  return typeof VideoEncoder !== 'undefined' && typeof VideoDecoder !== 'undefined';
+};
+
 export const useVideoConverter = () => {
-  const ffmpegRef = useRef<FFmpeg | null>(null);
-  const loadedRef = useRef(false);
+  const controllerRef = useRef<ReturnType<typeof webcodecsController> | null>(null);
 
-  const loadFFmpeg = useCallback(async () => {
-    if (loadedRef.current && ffmpegRef.current) return ffmpegRef.current;
+  /**
+   * Primary conversion method using @remotion/webcodecs (native WebCodecs API)
+   * Works better on Safari than FFmpeg.wasm
+   */
+  const convertWithWebCodecs = useCallback(
+    async (
+      file: File,
+      onProgress: (progress: number) => void,
+      _options: ConversionOptions
+    ): Promise<{ blob: Blob; url: string }> => {
+      onProgress(5);
 
-    const ffmpeg = new FFmpeg();
-    ffmpegRef.current = ffmpeg;
-
-    // FFmpeg.wasm core loading:
-    // Safari/WebKit tends to fail when the core is loaded via Blob URLs ("failed to import ffmpeg-core.js").
-    // So we try a direct URL first, and only fall back to toBlobURL if needed.
-    const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
-
-    ffmpeg.on('log', ({ message }) => {
-      // eslint-disable-next-line no-console
-      console.log('[ffmpeg]', message);
-    });
-
-    try {
-      // Attempt 1: direct URLs (no Blob import)
-      try {
-        await ffmpeg.load({
-          coreURL: `${baseURL}/ffmpeg-core.js`,
-          wasmURL: `${baseURL}/ffmpeg-core.wasm`,
-        });
-      } catch (directError) {
-        // Attempt 2: Blob URLs (CORS workaround for some environments)
-        await ffmpeg.load({
-          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-        });
+      // Abort any previous conversion
+      if (controllerRef.current) {
+        controllerRef.current.abort();
       }
+      controllerRef.current = webcodecsController();
 
-      loadedRef.current = true;
-      return ffmpeg;
-    } catch (loadError) {
-      console.error('FFmpeg load error:', loadError);
-      loadedRef.current = false;
-      ffmpegRef.current = null;
-      throw new Error('Video-Konvertierung nicht verfügbar (FFmpeg konnte nicht geladen werden).');
-    }
-  }, []);
+      try {
+        const result = await convertMedia({
+          src: file,
+          container: 'webm',
+          videoCodec: 'vp8', // VP8 has better browser support than VP9
+          audioCodec: 'opus',
+          controller: controllerRef.current,
+          onProgress: ({ overallProgress }) => {
+            if (overallProgress !== null) {
+              onProgress(5 + overallProgress * 90);
+            }
+          },
+        });
 
+        onProgress(95);
+
+        const blob = await result.save();
+        const url = URL.createObjectURL(blob);
+
+        onProgress(100);
+
+        return { blob, url };
+      } catch (error) {
+        console.error('WebCodecs conversion error:', error);
+        throw new Error('Video-Konvertierung fehlgeschlagen. Bitte versuche ein anderes Video.');
+      }
+    },
+    []
+  );
+
+  /**
+   * Fallback: Simple re-encoding using Canvas + MediaRecorder
+   * Works on browsers without WebCodecs support
+   */
+  const convertWithMediaRecorder = useCallback(
+    async (
+      file: File,
+      onProgress: (progress: number) => void,
+      _options: ConversionOptions
+    ): Promise<{ blob: Blob; url: string }> => {
+      onProgress(5);
+
+      return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.muted = true;
+        video.playsInline = true;
+
+        const fileUrl = URL.createObjectURL(file);
+        video.src = fileUrl;
+
+        video.onloadedmetadata = async () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+
+          if (!ctx) {
+            URL.revokeObjectURL(fileUrl);
+            reject(new Error('Canvas context not available'));
+            return;
+          }
+
+          // Check for supported MIME types
+          const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+            ? 'video/webm;codecs=vp8'
+            : MediaRecorder.isTypeSupported('video/webm')
+            ? 'video/webm'
+            : MediaRecorder.isTypeSupported('video/mp4')
+            ? 'video/mp4'
+            : null;
+
+          if (!mimeType) {
+            URL.revokeObjectURL(fileUrl);
+            reject(new Error('Kein unterstütztes Video-Format gefunden'));
+            return;
+          }
+
+          const stream = canvas.captureStream(30);
+          const recorder = new MediaRecorder(stream, { mimeType });
+          const chunks: Blob[] = [];
+
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) chunks.push(e.data);
+          };
+
+          recorder.onstop = () => {
+            URL.revokeObjectURL(fileUrl);
+            const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
+            const url = URL.createObjectURL(blob);
+            onProgress(100);
+            resolve({ blob, url });
+          };
+
+          recorder.onerror = () => {
+            URL.revokeObjectURL(fileUrl);
+            reject(new Error('MediaRecorder error'));
+          };
+
+          video.play();
+          recorder.start();
+          onProgress(20);
+
+          const drawFrame = () => {
+            if (video.ended || video.paused) {
+              recorder.stop();
+              return;
+            }
+            ctx.drawImage(video, 0, 0);
+            onProgress(20 + (video.currentTime / video.duration) * 75);
+            requestAnimationFrame(drawFrame);
+          };
+
+          drawFrame();
+
+          video.onended = () => {
+            recorder.stop();
+          };
+        };
+
+        video.onerror = () => {
+          URL.revokeObjectURL(fileUrl);
+          reject(new Error('Failed to load video'));
+        };
+      });
+    },
+    []
+  );
+
+  /**
+   * Main conversion function - uses WebCodecs if available, falls back to MediaRecorder
+   */
   const convertToWebM = useCallback(
     async (
       file: File,
       onProgress: (progress: number) => void,
       options: ConversionOptions
     ): Promise<{ blob: Blob; url: string }> => {
-      onProgress(5);
-      
-      const ffmpeg = await loadFFmpeg();
-      onProgress(15);
-
-      const inputName = 'input' + file.name.substring(file.name.lastIndexOf('.'));
-      const outputName = 'output.webm';
-
-      await ffmpeg.writeFile(inputName, await fetchFile(file));
-      onProgress(30);
-
-      ffmpeg.on('progress', ({ progress }) => {
-        const adjustedProgress = 30 + progress * 60;
-        onProgress(Math.min(adjustedProgress, 90));
+      console.log('[VideoConverter] Starting conversion...', {
+        webCodecsSupported: isWebCodecsSupported(),
+        fileName: file.name,
+        fileSize: file.size,
       });
 
-      const { qualitySettings, cropArea, dimensions, trimRange } = options;
-
-      // Build FFmpeg arguments
-      const args: string[] = [];
-
-      // Trim settings: place -ss BEFORE -i for more reliable seeking in wasm.
-      if (trimRange) {
-        args.push('-ss', Math.max(0, trimRange.start).toString());
+      // Try WebCodecs first (best quality and Safari support)
+      if (isWebCodecsSupported()) {
+        try {
+          console.log('[VideoConverter] Using WebCodecs API');
+          return await convertWithWebCodecs(file, onProgress, options);
+        } catch (webCodecsError) {
+          console.warn('[VideoConverter] WebCodecs failed, trying fallback:', webCodecsError);
+        }
       }
 
-      args.push('-i', inputName);
-
-      // Duration (recommended vs -to in this context)
-      if (trimRange) {
-        const duration = Math.max(0, trimRange.end - trimRange.start);
-        // Avoid 0-length encodes
-        if (duration > 0.05) args.push('-t', duration.toString());
-      }
-
-      // Build filter complex for crop and scale
-      const filters: string[] = [];
-
-      if (cropArea) {
-        // Many encoders require even dimensions.
-        const w = Math.max(2, cropArea.width - (cropArea.width % 2));
-        const h = Math.max(2, cropArea.height - (cropArea.height % 2));
-        filters.push(`crop=${w}:${h}:${cropArea.x}:${cropArea.y}`);
-      }
-
-      // Apply scale factor
-      const scale = qualitySettings.scale / 100;
-      if (scale !== 1 || dimensions) {
-        let targetWidth = dimensions?.width ?? -1;
-        let targetHeight = dimensions?.height ?? -1;
-        
-       if (scale !== 1 && !dimensions) {
-         // Keep even dimensions to avoid encoder failures.
-         filters.push(
-           `scale=trunc(iw*${scale}/2)*2:trunc(ih*${scale}/2)*2`
-         );
-       } else if (dimensions) {
-         const w = targetWidth > 0 ? targetWidth - (targetWidth % 2) : -1;
-         const h = targetHeight > 0 ? targetHeight - (targetHeight % 2) : -1;
-         filters.push(`scale=${w}:${h}`);
-       }
-      }
-
-      if (filters.length > 0) {
-        args.push('-vf', filters.join(','));
-      }
-
-      // Quality settings - use VP8/Vorbis as default (more stable, avoids memory errors with VP9/Opus)
-      if (qualitySettings.mode === 'percentage') {
-        const internalQuality = displayedToInternalQuality(qualitySettings.percentage);
-        // Map internal quality (50-100) to CRF for VP8 (range ~45..20)
-        const crf = Math.round(45 - (internalQuality / 100) * 25);
-        args.push('-c:v', 'libvpx', '-crf', crf.toString(), '-b:v', '1M');
-      } else {
-        const targetBitrate = Math.max(100, Math.round((qualitySettings.maxSizeKB * 8) / 30));
-        args.push('-c:v', 'libvpx', '-b:v', `${targetBitrate}k`);
-      }
-      
-      // Use vorbis audio codec (stable alternative to opus which causes memory errors)
-      args.push('-c:a', 'libvorbis', '-b:a', '128k');
-      
-      // Output
-      args.push(outputName);
-
-      console.log('FFmpeg args:', args);
-
-      try {
-        await ffmpeg.exec(args);
-      } catch (execError) {
-        const msg = (execError as any)?.message ?? String(execError);
-        console.error('FFmpeg exec error:', msg);
-        throw new Error(`Video-Konvertierung fehlgeschlagen. Bitte versuche ein anderes Video oder Format.`);
-      }
-
-      onProgress(95);
-
-      const data = await ffmpeg.readFile(outputName);
-      const uint8Array = new Uint8Array(data as Uint8Array);
-      const blob = new Blob([uint8Array], { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
-
-      // Cleanup
-      try {
-        await ffmpeg.deleteFile(inputName);
-      } catch {
-        // ignore
-      }
-      try {
-        await ffmpeg.deleteFile(outputName);
-      } catch {
-        // ignore
-      }
-
-      onProgress(100);
-
-      return { blob, url };
+      // Fallback to MediaRecorder
+      console.log('[VideoConverter] Using MediaRecorder fallback');
+      return await convertWithMediaRecorder(file, onProgress, options);
     },
-    [loadFFmpeg]
+    [convertWithWebCodecs, convertWithMediaRecorder]
   );
 
   // Extract first frame as preview
@@ -201,17 +215,17 @@ export const useVideoConverter = () => {
           const canvas = document.createElement('canvas');
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
-          
+
           const ctx = canvas.getContext('2d');
           if (!ctx) {
             URL.revokeObjectURL(url);
             reject(new Error('Could not get canvas context'));
             return;
           }
-          
+
           ctx.drawImage(video, 0, 0);
           const frameDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          
+
           URL.revokeObjectURL(url);
           resolve(frameDataUrl);
         };
@@ -226,28 +240,25 @@ export const useVideoConverter = () => {
   );
 
   // Get video duration
-  const getVideoDuration = useCallback(
-    async (file: File): Promise<number> => {
-      return new Promise((resolve, reject) => {
-        const video = document.createElement('video');
-        video.preload = 'metadata';
-        
-        const url = URL.createObjectURL(file);
-        video.src = url;
+  const getVideoDuration = useCallback(async (file: File): Promise<number> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
 
-        video.onloadedmetadata = () => {
-          URL.revokeObjectURL(url);
-          resolve(video.duration);
-        };
+      const url = URL.createObjectURL(file);
+      video.src = url;
 
-        video.onerror = () => {
-          URL.revokeObjectURL(url);
-          reject(new Error('Failed to load video'));
-        };
-      });
-    },
-    []
-  );
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(url);
+        resolve(video.duration);
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load video'));
+      };
+    });
+  }, []);
 
   return { convertToWebM, extractFrame, getVideoDuration };
 };
