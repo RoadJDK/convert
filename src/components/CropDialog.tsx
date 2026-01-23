@@ -87,8 +87,6 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
   const [trimEnd, setTrimEnd] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Keep last known slider values so we can detect which thumb moved.
-  const trimSliderPrevRef = useRef<[number, number, number]>([0, 0, 0]);
 
   // Separate aspect ratio inputs
   const [aspectWidth, setAspectWidth] = useState(0);
@@ -157,7 +155,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
       setTrimEnd(duration);
       setCurrentTime(0);
 
-      trimSliderPrevRef.current = [0, 0, duration];
+      
       
       const crop = centerAspectCrop(videoWidth, videoHeight, videoWidth / videoHeight);
       setCrop(crop);
@@ -196,62 +194,57 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
     }
   }, []);
 
-  const handleTrimSliderChange = useCallback(
+  // Separate handlers for Start/End range slider and Position slider
+  const handleRangeChange = useCallback(
     (values: number[]) => {
-      if (!Array.isArray(values) || values.length !== 3) return;
-
-      const prev = trimSliderPrevRef.current;
-      const deltas = values.map((v, i) => Math.abs(v - prev[i]));
-      const maxDelta = Math.max(...deltas);
-      const movedIndex = deltas.indexOf(maxDelta);
+      if (!Array.isArray(values) || values.length !== 2) return;
 
       const minGap = 0.1;
       let start = values[0];
-      let pos = values[1];
-      let end = values[2];
+      let end = values[1];
 
-      // Enforce constraints for start/end
+      // Enforce constraints
       start = Math.max(0, Math.min(start, end - minGap));
       end = Math.min(videoDuration, Math.max(end, start + minGap));
 
-      // NEW RULE: Only change position if:
-      // 1. The position thumb (index 1) was moved, OR
-      // 2. The current position is outside the new start/end bounds
-      const prevPos = prev[1];
-      let newPos = prevPos;
-      
-      if (movedIndex === 1) {
-        // User moved the position thumb
-        newPos = Math.max(start, Math.min(end, pos));
-      } else {
-        // User moved start or end - only clamp position if it's now out of bounds
-        if (prevPos < start) {
-          newPos = start;
-        } else if (prevPos > end) {
-          newPos = end;
-        }
-        // Otherwise keep the previous position unchanged
-      }
-
       setTrimStart(start);
       setTrimEnd(end);
-      setCurrentTime(newPos);
-      trimSliderPrevRef.current = [start, newPos, end];
+
+      // Only clamp position if it's now out of bounds
+      setCurrentTime(prev => {
+        if (prev < start) return start;
+        if (prev > end) return end;
+        return prev;
+      });
 
       if (videoRef.current) {
         videoRef.current.pause();
         setIsPlaying(false);
-        // Jump to the adjusted bound when adjusting start/end, or to new position when moving position
-        if (movedIndex === 0) {
-          videoRef.current.currentTime = start;
-        } else if (movedIndex === 2) {
-          videoRef.current.currentTime = end;
-        } else {
-          videoRef.current.currentTime = newPos;
-        }
+        // Preview the adjusted boundary
+        const wasCloserToStart = Math.abs(values[0] - trimStart) > Math.abs(values[1] - trimEnd);
+        videoRef.current.currentTime = wasCloserToStart ? start : end;
       }
     },
-    [videoDuration]
+    [videoDuration, trimStart, trimEnd]
+  );
+
+  const handlePositionChange = useCallback(
+    (values: number[]) => {
+      if (!Array.isArray(values) || values.length !== 1) return;
+
+      let pos = values[0];
+      // Clamp position within trim range
+      pos = Math.max(trimStart, Math.min(trimEnd, pos));
+
+      setCurrentTime(pos);
+
+      if (videoRef.current) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+        videoRef.current.currentTime = pos;
+      }
+    },
+    [trimStart, trimEnd]
   );
 
   const togglePlayPause = useCallback(() => {
@@ -425,7 +418,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
     setTrimStart(0);
     setTrimEnd(videoDuration);
     setCurrentTime(0);
-    trimSliderPrevRef.current = [0, 0, videoDuration];
+    
     if (videoRef.current) {
       videoRef.current.currentTime = 0;
     }
@@ -539,7 +532,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                   </span>
                 </div>
 
-                {/* Unified timeline - drag handles directly on the visual bar */}
+                {/* Unified timeline - two overlapping sliders for better control */}
                 <div className="space-y-3">
                   {/* Time labels */}
                   <div className="flex justify-between text-xs font-mono text-muted-foreground">
@@ -548,46 +541,70 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                     <span className="text-red-600">{formatTime(trimEnd)}</span>
                   </div>
 
-                  {/* Combined slider with 3 thumbs - using z-index to control interaction */}
-                  <SliderPrimitive.Root
-                    value={[trimStart, currentTime, trimEnd]}
-                    onValueChange={handleTrimSliderChange}
-                    min={0}
-                    max={videoDuration}
-                    step={0.1}
-                    className="relative flex w-full touch-none select-none items-center"
-                  >
-                    <SliderPrimitive.Track className="relative h-8 w-full grow overflow-hidden rounded-md bg-muted">
-                      <SliderPrimitive.Range className="absolute h-full bg-primary/30" />
-                    </SliderPrimitive.Track>
+                  {/* Stacked sliders - Range on top (z-20), Position below (z-10) */}
+                  <div className="relative h-10">
+                    {/* Position slider (background layer) */}
+                    <SliderPrimitive.Root
+                      value={[currentTime]}
+                      onValueChange={handlePositionChange}
+                      min={0}
+                      max={videoDuration}
+                      step={0.1}
+                      className="absolute inset-0 flex w-full touch-none select-none items-center z-10"
+                    >
+                      <SliderPrimitive.Track className="relative h-8 w-full grow overflow-hidden rounded-md bg-muted">
+                        {/* Highlight the trimmed range */}
+                        <div 
+                          className="absolute h-full bg-primary/20"
+                          style={{
+                            left: `${(trimStart / videoDuration) * 100}%`,
+                            width: `${((trimEnd - trimStart) / videoDuration) * 100}%`
+                          }}
+                        />
+                      </SliderPrimitive.Track>
+                      {/* Position thumb - thin line */}
+                      <SliderPrimitive.Thumb
+                        className="block h-6 w-1 rounded-full bg-primary shadow-lg ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-ew-resize"
+                        aria-label="Position"
+                      />
+                    </SliderPrimitive.Root>
 
-                    {/* Start - higher z-index for priority */}
-                    <SliderPrimitive.Thumb
-                      className="block h-8 w-4 rounded-sm border-2 border-accent bg-accent shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 z-20 cursor-ew-resize"
-                      aria-label="Start"
-                    />
-                    {/* Position - lower z-index so Start/End get priority */}
-                    <SliderPrimitive.Thumb
-                      className="block h-5 w-1.5 rounded-full border-2 border-primary bg-primary shadow-lg ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 z-10 cursor-ew-resize"
-                      aria-label="Position"
-                    />
-                    {/* End - higher z-index for priority */}
-                    <SliderPrimitive.Thumb
-                      className="block h-8 w-4 rounded-sm border-2 border-destructive bg-destructive shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 z-20 cursor-ew-resize"
-                      aria-label="Ende"
-                    />
-                  </SliderPrimitive.Root>
+                    {/* Start/End range slider (foreground layer - clickable edges) */}
+                    <SliderPrimitive.Root
+                      value={[trimStart, trimEnd]}
+                      onValueChange={handleRangeChange}
+                      min={0}
+                      max={videoDuration}
+                      step={0.1}
+                      minStepsBetweenThumbs={1}
+                      className="absolute inset-0 flex w-full touch-none select-none items-center z-20 pointer-events-none"
+                    >
+                      <SliderPrimitive.Track className="relative h-8 w-full grow overflow-hidden rounded-md pointer-events-none">
+                        <SliderPrimitive.Range className="absolute h-full pointer-events-none" />
+                      </SliderPrimitive.Track>
+                      {/* Start thumb */}
+                      <SliderPrimitive.Thumb
+                        className="block h-10 w-4 rounded-sm border-2 border-green-500 bg-green-500 shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-ew-resize pointer-events-auto"
+                        aria-label="Start"
+                      />
+                      {/* End thumb */}
+                      <SliderPrimitive.Thumb
+                        className="block h-10 w-4 rounded-sm border-2 border-red-500 bg-red-500 shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-ew-resize pointer-events-auto"
+                        aria-label="Ende"
+                      />
+                    </SliderPrimitive.Root>
+                  </div>
                   
                   {/* Legend */}
                   <div className="flex justify-center gap-4 text-xs">
                     <span className="flex items-center gap-1">
-                      <span className="w-2 h-4 bg-green-500 rounded-sm" /> Start
+                      <span className="w-3 h-4 bg-green-500 rounded-sm" /> Start
                     </span>
                     <span className="flex items-center gap-1">
                       <span className="w-1 h-4 bg-primary rounded-full" /> Position
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="w-2 h-4 bg-red-500 rounded-sm" /> Ende
+                      <span className="w-3 h-4 bg-red-500 rounded-sm" /> Ende
                     </span>
                   </div>
                 </div>
