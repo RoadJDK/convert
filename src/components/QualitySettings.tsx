@@ -26,14 +26,30 @@ interface QualitySettingsProps {
 }
 
 // Estimate file size based on quality percentage
-function estimateFileSize(originalSize: number, percentage: number): number {
-  // 50% quality ≈ 20% of original size
-  // 100% quality ≈ 40% of original size  
-  // 150% quality ≈ 60% of original size
-  // 200% quality ≈ 80% of original size
-  // This is a rough estimate for WebP conversion
-  const factor = (percentage / 250); // Maps 50-200 to 0.2-0.8
-  return Math.round(originalSize * factor);
+// WebP/JPEG compression is highly variable, this is a rough estimate
+function estimateFileSize(originalSize: number, percentage: number, outputFormat: string): number {
+  // Internal quality: 50% displayed = 25% internal, 100% = 50%, 200% = 100%
+  const internalQuality = percentage / 2;
+  
+  // Base compression ratios for different formats (empirical estimates)
+  // These are rough and depend heavily on image content
+  if (outputFormat === 'png') {
+    // PNG is lossless, size stays similar or slightly smaller
+    return Math.round(originalSize * 0.9);
+  }
+  
+  // WebP and JPEG compression estimates
+  // At 50% internal quality (~100% displayed), expect roughly 15-25% of original
+  // At 25% internal quality (~50% displayed), expect roughly 5-15% of original
+  // At 92% internal quality (~184% displayed), expect roughly 30-50% of original
+  const minRatio = 0.05; // Minimum compression (very low quality)
+  const maxRatio = 0.50; // Maximum size at high quality
+  
+  // Map internal quality (25-100) to compression ratio
+  const qualityNormalized = (internalQuality - 25) / 75; // 0 to 1
+  const compressionRatio = minRatio + (maxRatio - minRatio) * Math.pow(qualityNormalized, 1.5);
+  
+  return Math.round(originalSize * compressionRatio);
 }
 
 export const QualitySettings = ({ settings, onChange, disabled, originalSize, fileType = 'image' }: QualitySettingsProps) => {
@@ -61,16 +77,16 @@ export const QualitySettings = ({ settings, onChange, disabled, originalSize, fi
   // Display percentage (100% = internal 50%, 200% = internal 100%)
   const displayPercentage = settings.percentage;
 
-  // Estimate file size based on quality
-  const estimatedSize = useMemo(() => {
-    if (!originalSize || settings.mode !== 'percentage') return null;
-    return estimateFileSize(originalSize, settings.percentage);
-  }, [originalSize, settings.percentage, settings.mode]);
-
   // Get format options based on file type
   const formatOptions = fileType === 'image' ? IMAGE_OUTPUT_FORMATS : VIDEO_OUTPUT_FORMATS;
   const defaultFormat = fileType === 'image' ? 'webp' : 'webm';
   const currentFormat = settings.outputFormat || defaultFormat;
+
+  // Estimate file size based on quality
+  const estimatedSize = useMemo(() => {
+    if (!originalSize || settings.mode !== 'percentage') return null;
+    return estimateFileSize(originalSize, settings.percentage, currentFormat);
+  }, [originalSize, settings.percentage, settings.mode, currentFormat]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

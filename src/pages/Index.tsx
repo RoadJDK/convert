@@ -6,10 +6,10 @@ import { Stats } from '@/components/Stats';
 import { BulkSettingsBar } from '@/components/BulkSettingsBar';
 import { CropDialog } from '@/components/CropDialog';
 import { DownloadDropdown } from '@/components/DownloadDropdown';
+import { SelectAllControls } from '@/components/SelectAllControls';
 import { useFileConverter } from '@/hooks/useFileConverter';
 import { useAIRename } from '@/hooks/useAIRename';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Play, Trash2 } from 'lucide-react';
 import { ConvertibleFile, CropArea, QualitySettings, TrimRange, FileType } from '@/types/converter';
 
@@ -204,15 +204,15 @@ const Index = () => {
 
           {/* Select All (only when there are pending files) */}
           {pendingFiles.length > 1 && (
-            <div className="flex items-center gap-2 px-1">
-              <Checkbox
-                checked={selectedPendingIds.length === pendingFiles.length && pendingFiles.length > 0}
-                onCheckedChange={handleSelectAll}
-              />
-              <span className="text-sm text-muted-foreground cursor-pointer" onClick={handleSelectAll}>
-                Alle auswählen
-              </span>
-            </div>
+            <SelectAllControls
+              pendingFiles={pendingFiles}
+              selectedPendingIds={selectedPendingIds}
+              onSelectType={(type) => {
+                const filesOfType = pendingFiles.filter(f => f.type === type);
+                setSelectedIds(filesOfType.map(f => f.id));
+              }}
+              onClearSelection={() => setSelectedIds([])}
+            />
           )}
 
           {/* File List */}
