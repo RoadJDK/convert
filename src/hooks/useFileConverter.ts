@@ -12,7 +12,7 @@ export const useFileConverter = () => {
   const [files, setFiles] = useState<ConvertibleFile[]>([]);
   const [videoPreviews, setVideoPreviews] = useState<Record<string, string>>({});
   const conversionTimestamps = useRef<number[]>([]);
-  const { convertToWebP } = useImageConverter();
+  const { convertImage, convertToWebP } = useImageConverter();
   const { convertToWebM, extractFrame } = useVideoConverter();
   const { trackConversion } = useStatsTracker();
 
@@ -132,7 +132,7 @@ export const useFileConverter = () => {
         let result: { blob: Blob; url: string };
 
         if (fileItem.type === 'image') {
-          result = await convertToWebP(fileItem.file, onProgress, options);
+          result = await convertImage(fileItem.file, onProgress, options);
         } else {
           result = await convertToWebM(fileItem.file, onProgress, options);
         }
@@ -154,7 +154,7 @@ export const useFileConverter = () => {
         });
       }
     },
-    [convertToWebP, convertToWebM, updateFile, trackConversion, checkRateLimit]
+    [convertImage, convertToWebM, updateFile, trackConversion, checkRateLimit]
   );
 
   const removeFile = useCallback((id: string) => {
@@ -186,7 +186,7 @@ export const useFileConverter = () => {
   const downloadFile = useCallback((fileItem: ConvertibleFile, customName?: string) => {
     if (!fileItem.convertedUrl) return;
 
-    const extension = getOutputExtension(fileItem.type);
+    const extension = getOutputExtension(fileItem.type, fileItem.qualitySettings.outputFormat);
     const baseName = customName || fileItem.suggestedName || fileItem.originalName.replace(/\.[^/.]+$/, '');
     const fileName = `${baseName}.${extension}`;
 

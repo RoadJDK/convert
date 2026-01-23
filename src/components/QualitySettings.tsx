@@ -6,13 +6,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { QualitySettings as QualitySettingsType, QualityMode, formatFileSize } from '@/types/converter';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { 
+  QualitySettings as QualitySettingsType, 
+  QualityMode, 
+  formatFileSize,
+  IMAGE_OUTPUT_FORMATS,
+  VIDEO_OUTPUT_FORMATS,
+  FileType,
+  OutputFormat,
+} from '@/types/converter';
 
 interface QualitySettingsProps {
   settings: QualitySettingsType;
   onChange: (settings: QualitySettingsType) => void;
   disabled?: boolean;
   originalSize?: number; // Original file size in bytes for estimation
+  fileType?: FileType; // To show correct format options
 }
 
 // Estimate file size based on quality percentage
@@ -26,7 +36,7 @@ function estimateFileSize(originalSize: number, percentage: number): number {
   return Math.round(originalSize * factor);
 }
 
-export const QualitySettings = ({ settings, onChange, disabled, originalSize }: QualitySettingsProps) => {
+export const QualitySettings = ({ settings, onChange, disabled, originalSize, fileType = 'image' }: QualitySettingsProps) => {
   const [open, setOpen] = useState(false);
 
   const handleModeChange = (mode: string) => {
@@ -44,6 +54,10 @@ export const QualitySettings = ({ settings, onChange, disabled, originalSize }: 
     }
   };
 
+  const handleFormatChange = (format: string) => {
+    onChange({ ...settings, outputFormat: format as OutputFormat });
+  };
+
   // Display percentage (100% = internal 50%, 200% = internal 100%)
   const displayPercentage = settings.percentage;
 
@@ -52,6 +66,11 @@ export const QualitySettings = ({ settings, onChange, disabled, originalSize }: 
     if (!originalSize || settings.mode !== 'percentage') return null;
     return estimateFileSize(originalSize, settings.percentage);
   }, [originalSize, settings.percentage, settings.mode]);
+
+  // Get format options based on file type
+  const formatOptions = fileType === 'image' ? IMAGE_OUTPUT_FORMATS : VIDEO_OUTPUT_FORMATS;
+  const defaultFormat = fileType === 'image' ? 'webp' : 'webm';
+  const currentFormat = settings.outputFormat || defaultFormat;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -65,9 +84,26 @@ export const QualitySettings = ({ settings, onChange, disabled, originalSize }: 
           <Settings2 className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80" align="end">
+      <PopoverContent className="w-80 bg-popover border border-border shadow-lg z-50" align="end">
         <div className="space-y-4">
           <h4 className="font-medium text-sm">Qualitätseinstellungen</h4>
+
+          {/* Output Format Dropdown */}
+          <div className="space-y-2">
+            <Label className="text-xs">Zielformat</Label>
+            <Select value={currentFormat} onValueChange={handleFormatChange}>
+              <SelectTrigger className="w-full h-8 bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border border-border shadow-lg z-50">
+                {formatOptions.map((format) => (
+                  <SelectItem key={format.value} value={format.value}>
+                    {format.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           
           <Tabs value={settings.mode} onValueChange={handleModeChange}>
             <TabsList className="grid w-full grid-cols-2">
