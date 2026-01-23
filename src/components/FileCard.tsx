@@ -251,10 +251,10 @@ export const FileCard = ({
                 {onAIRename && (
                   <Button
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                     onClick={onAIRename}
                     disabled={isAIRenaming}
-                    className="h-8 w-8 p-0 text-primary hover:text-primary/80"
+                    className="h-8 gap-1.5 px-2.5"
                     title="KI-Umbenennung"
                   >
                     {isAIRenaming ? (
@@ -262,6 +262,7 @@ export const FileCard = ({
                     ) : (
                       <Sparkles className="h-4 w-4" />
                     )}
+                    <span className="text-xs">Umbenennen</span>
                   </Button>
                 )}
               </div>

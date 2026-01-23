@@ -595,22 +595,10 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                     </SliderPrimitive.Root>
                   </div>
                   
-                  {/* Legend */}
-                  <div className="flex justify-center gap-4 text-xs">
-                    <span className="flex items-center gap-1">
-                      <span className="w-3 h-4 bg-green-500 rounded-sm" /> Start
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-1 h-4 bg-primary rounded-full" /> Position
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-3 h-4 bg-red-500 rounded-sm" /> Ende
-                    </span>
-                  </div>
                 </div>
 
                 <p className="text-xs text-muted-foreground text-center">
-                  Dauer: {formatTime(Math.max(0, trimEnd - trimStart))} von {formatTime(videoDuration)}
+                  Dauer: {formatTime(Math.max(0, trimEnd - trimStart))}
                 </p>
               </div>
             )}
