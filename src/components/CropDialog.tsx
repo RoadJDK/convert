@@ -210,21 +210,45 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
       let pos = values[1];
       let end = values[2];
 
-      // Enforce constraints
+      // Enforce constraints for start/end
       start = Math.max(0, Math.min(start, end - minGap));
       end = Math.min(videoDuration, Math.max(end, start + minGap));
-      pos = Math.max(start, Math.min(end, pos));
+
+      // NEW RULE: Only change position if:
+      // 1. The position thumb (index 1) was moved, OR
+      // 2. The current position is outside the new start/end bounds
+      const prevPos = prev[1];
+      let newPos = prevPos;
+      
+      if (movedIndex === 1) {
+        // User moved the position thumb
+        newPos = Math.max(start, Math.min(end, pos));
+      } else {
+        // User moved start or end - only clamp position if it's now out of bounds
+        if (prevPos < start) {
+          newPos = start;
+        } else if (prevPos > end) {
+          newPos = end;
+        }
+        // Otherwise keep the previous position unchanged
+      }
 
       setTrimStart(start);
       setTrimEnd(end);
-      setCurrentTime(pos);
-      trimSliderPrevRef.current = [start, pos, end];
+      setCurrentTime(newPos);
+      trimSliderPrevRef.current = [start, newPos, end];
 
       if (videoRef.current) {
         videoRef.current.pause();
         setIsPlaying(false);
-        // Jump to start when adjusting start; otherwise keep the current preview position.
-        videoRef.current.currentTime = movedIndex === 0 ? start : pos;
+        // Jump to the adjusted bound when adjusting start/end, or to new position when moving position
+        if (movedIndex === 0) {
+          videoRef.current.currentTime = start;
+        } else if (movedIndex === 2) {
+          videoRef.current.currentTime = end;
+        } else {
+          videoRef.current.currentTime = newPos;
+        }
       }
     },
     [videoDuration]
