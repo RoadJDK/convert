@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
-import { convertMedia, webcodecsController } from '@remotion/webcodecs';
-import { QualitySettings, CropArea, TrimRange } from '@/types/converter';
+import { convertMedia, webcodecsController, canReencodeVideoTrack, canReencodeAudioTrack } from '@remotion/webcodecs';
+import { QualitySettings, CropArea, TrimRange, VideoOutputFormat } from '@/types/converter';
 
 interface ConversionOptions {
   qualitySettings: QualitySettings;
@@ -8,6 +8,11 @@ interface ConversionOptions {
   dimensions?: { width: number; height: number };
   trimRange?: TrimRange;
 }
+
+// Detect Safari/WebKit
+const isSafari = () => {
+  return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+};
 
 // Check if WebCodecs API is available (required for @remotion/webcodecs)
 const isWebCodecsSupported = () => {
@@ -19,13 +24,12 @@ export const useVideoConverter = () => {
 
   /**
    * Primary conversion method using @remotion/webcodecs (native WebCodecs API)
-   * Works better on Safari than FFmpeg.wasm
    */
   const convertWithWebCodecs = useCallback(
     async (
       file: File,
       onProgress: (progress: number) => void,
-      _options: ConversionOptions
+      options: ConversionOptions
     ): Promise<{ blob: Blob; url: string }> => {
       onProgress(5);
 
@@ -35,23 +39,78 @@ export const useVideoConverter = () => {
       }
       controllerRef.current = webcodecsController();
 
+      // Determine output format based on settings
+      const outputFormat = (options.qualitySettings.outputFormat || 'webm') as VideoOutputFormat;
+      
+      // For Safari, prefer MP4 with H.264 for better compatibility
+      const useSafariCompat = isSafari() && outputFormat === 'webm';
+      const container = useSafariCompat ? 'mp4' : (outputFormat === 'mp4' ? 'mp4' : 'webm');
+      
+      // Select codecs based on container
+      const videoCodec = container === 'mp4' ? 'h264' : 'vp8';
+      const audioCodec = container === 'mp4' ? 'aac' : 'opus';
+
+      console.log('[VideoConverter] Converting with WebCodecs:', {
+        container,
+        videoCodec,
+        audioCodec,
+        isSafari: isSafari(),
+      });
+
       try {
         const result = await convertMedia({
           src: file,
-          container: 'webm',
-          videoCodec: 'vp8', // VP8 has better browser support than VP9
-          audioCodec: 'opus',
+          container,
+          videoCodec,
+          audioCodec,
           controller: controllerRef.current,
           onProgress: ({ overallProgress }) => {
             if (overallProgress !== null) {
               onProgress(5 + overallProgress * 90);
             }
           },
+          onVideoTrack: async ({ track }) => {
+            const canReencode = await canReencodeVideoTrack({
+              track,
+              videoCodec,
+              resizeOperation: null,
+              rotate: 0,
+            });
+            if (canReencode) {
+              return { type: 'reencode', videoCodec, resizeOperation: null, rotate: 0 };
+            }
+            // If we can't re-encode, try to copy the track
+            return { type: 'copy' };
+          },
+          onAudioTrack: async ({ track }) => {
+            const canReencode = await canReencodeAudioTrack({
+              track,
+              audioCodec,
+              bitrate: 128000,
+              sampleRate: null,
+            });
+            if (canReencode) {
+              return { type: 'reencode', audioCodec, bitrate: 128000, sampleRate: null };
+            }
+            // If we can't re-encode, try to copy the track
+            return { type: 'copy' };
+          },
         });
 
         onProgress(95);
 
         const blob = await result.save();
+        
+        // Validate the blob
+        if (!blob || blob.size === 0) {
+          throw new Error('Converted video blob is empty');
+        }
+
+        console.log('[VideoConverter] Conversion complete:', {
+          blobSize: blob.size,
+          blobType: blob.type,
+        });
+
         const url = URL.createObjectURL(blob);
 
         onProgress(100);
@@ -59,7 +118,7 @@ export const useVideoConverter = () => {
         return { blob, url };
       } catch (error) {
         console.error('WebCodecs conversion error:', error);
-        throw new Error('Video-Konvertierung fehlgeschlagen. Bitte versuche ein anderes Video.');
+        throw error;
       }
     },
     []
@@ -73,9 +132,11 @@ export const useVideoConverter = () => {
     async (
       file: File,
       onProgress: (progress: number) => void,
-      _options: ConversionOptions
+      options: ConversionOptions
     ): Promise<{ blob: Blob; url: string }> => {
       onProgress(5);
+
+      const outputFormat = options.qualitySettings.outputFormat || 'webm';
 
       return new Promise((resolve, reject) => {
         const video = document.createElement('video');
@@ -97,14 +158,28 @@ export const useVideoConverter = () => {
             return;
           }
 
-          // Check for supported MIME types
-          const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
-            ? 'video/webm;codecs=vp8'
-            : MediaRecorder.isTypeSupported('video/webm')
-            ? 'video/webm'
-            : MediaRecorder.isTypeSupported('video/mp4')
-            ? 'video/mp4'
-            : null;
+          // Determine best MIME type for the target format
+          let mimeType: string | null = null;
+          
+          if (outputFormat === 'mp4') {
+            // Safari/iOS needs mp4
+            if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
+              mimeType = 'video/mp4;codecs=avc1';
+            } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+              mimeType = 'video/mp4';
+            }
+          }
+          
+          if (!mimeType) {
+            // Fallback to webm
+            if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+              mimeType = 'video/webm;codecs=vp8,opus';
+            } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) {
+              mimeType = 'video/webm;codecs=vp8';
+            } else if (MediaRecorder.isTypeSupported('video/webm')) {
+              mimeType = 'video/webm';
+            }
+          }
 
           if (!mimeType) {
             URL.revokeObjectURL(fileUrl);
@@ -112,8 +187,29 @@ export const useVideoConverter = () => {
             return;
           }
 
+          console.log('[VideoConverter] MediaRecorder using MIME type:', mimeType);
+
           const stream = canvas.captureStream(30);
-          const recorder = new MediaRecorder(stream, { mimeType });
+          
+          // Try to capture audio from original video
+          try {
+            const audioCtx = new AudioContext();
+            const source = audioCtx.createMediaElementSource(video);
+            const dest = audioCtx.createMediaStreamDestination();
+            source.connect(dest);
+            source.connect(audioCtx.destination);
+            
+            dest.stream.getAudioTracks().forEach(track => {
+              stream.addTrack(track);
+            });
+          } catch {
+            console.log('[VideoConverter] Could not capture audio track');
+          }
+
+          const recorder = new MediaRecorder(stream, { 
+            mimeType,
+            videoBitsPerSecond: 2500000, // 2.5 Mbps
+          });
           const chunks: Blob[] = [];
 
           recorder.ondataavailable = (e) => {
@@ -122,19 +218,36 @@ export const useVideoConverter = () => {
 
           recorder.onstop = () => {
             URL.revokeObjectURL(fileUrl);
-            const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
+            
+            const blob = new Blob(chunks, { type: mimeType!.split(';')[0] });
+            
+            if (blob.size === 0) {
+              reject(new Error('Video conversion produced empty file'));
+              return;
+            }
+            
+            console.log('[VideoConverter] MediaRecorder complete:', {
+              blobSize: blob.size,
+              blobType: blob.type,
+            });
+            
             const url = URL.createObjectURL(blob);
             onProgress(100);
             resolve({ blob, url });
           };
 
-          recorder.onerror = () => {
+          recorder.onerror = (event) => {
             URL.revokeObjectURL(fileUrl);
+            console.error('[VideoConverter] MediaRecorder error:', event);
             reject(new Error('MediaRecorder error'));
           };
 
-          video.play();
-          recorder.start();
+          // Start playback and recording
+          video.currentTime = 0;
+          await video.play();
+          
+          // Request data frequently for better reliability
+          recorder.start(100); // Request data every 100ms
           onProgress(20);
 
           const drawFrame = () => {
@@ -150,7 +263,7 @@ export const useVideoConverter = () => {
           drawFrame();
 
           video.onended = () => {
-            recorder.stop();
+            setTimeout(() => recorder.stop(), 100); // Small delay to ensure last frame
           };
         };
 
@@ -174,11 +287,13 @@ export const useVideoConverter = () => {
     ): Promise<{ blob: Blob; url: string }> => {
       console.log('[VideoConverter] Starting conversion...', {
         webCodecsSupported: isWebCodecsSupported(),
+        isSafari: isSafari(),
         fileName: file.name,
         fileSize: file.size,
+        outputFormat: options.qualitySettings.outputFormat,
       });
 
-      // Try WebCodecs first (best quality and Safari support)
+      // Try WebCodecs first (best quality)
       if (isWebCodecsSupported()) {
         try {
           console.log('[VideoConverter] Using WebCodecs API');
