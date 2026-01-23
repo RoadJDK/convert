@@ -25,30 +25,52 @@ interface QualitySettingsProps {
   fileType?: FileType; // To show correct format options
 }
 
-// Estimate file size based on quality percentage
-// WebP/JPEG compression is highly variable, this is a rough estimate
-function estimateFileSize(originalSize: number, percentage: number, outputFormat: string): number {
+// Estimate file size based on quality percentage and output format
+// Different formats have very different compression characteristics
+function estimateFileSize(originalSize: number, percentage: number, outputFormat: string, fileType: 'image' | 'video'): number {
   // Internal quality: 50% displayed = 25% internal, 100% = 50%, 200% = 100%
   const internalQuality = percentage / 2;
   
-  // Base compression ratios for different formats (empirical estimates)
-  // These are rough and depend heavily on image content
-  if (outputFormat === 'png') {
-    // PNG is lossless, size stays similar or slightly smaller
-    return Math.round(originalSize * 0.9);
+  // IMAGE FORMATS
+  if (fileType === 'image') {
+    // PNG is lossless - size stays similar or can be larger than original JPEG
+    if (outputFormat === 'png') {
+      // PNG typically 2-5x larger than compressed JPEG
+      return Math.round(originalSize * 1.5);
+    }
+    
+    // JPEG compression estimates - typically larger than WebP
+    if (outputFormat === 'jpeg') {
+      const minRatio = 0.10; // Very low quality
+      const maxRatio = 0.70; // High quality JPEG
+      const qualityNormalized = Math.max(0, (internalQuality - 25) / 75);
+      const compressionRatio = minRatio + (maxRatio - minRatio) * Math.pow(qualityNormalized, 1.3);
+      return Math.round(originalSize * compressionRatio);
+    }
+    
+    // WebP compression estimates - most efficient
+    const minRatio = 0.05; // Very low quality
+    const maxRatio = 0.40; // High quality WebP
+    const qualityNormalized = Math.max(0, (internalQuality - 25) / 75);
+    const compressionRatio = minRatio + (maxRatio - minRatio) * Math.pow(qualityNormalized, 1.5);
+    return Math.round(originalSize * compressionRatio);
   }
   
-  // WebP and JPEG compression estimates
-  // At 50% internal quality (~100% displayed), expect roughly 15-25% of original
-  // At 25% internal quality (~50% displayed), expect roughly 5-15% of original
-  // At 92% internal quality (~184% displayed), expect roughly 30-50% of original
-  const minRatio = 0.05; // Minimum compression (very low quality)
-  const maxRatio = 0.50; // Maximum size at high quality
+  // VIDEO FORMATS
+  // MP4 (H.264) is typically more efficient than WebM (VP9) for most content
+  if (outputFormat === 'mp4') {
+    const minRatio = 0.15;
+    const maxRatio = 0.60;
+    const qualityNormalized = Math.max(0, (internalQuality - 25) / 75);
+    const compressionRatio = minRatio + (maxRatio - minRatio) * Math.pow(qualityNormalized, 1.2);
+    return Math.round(originalSize * compressionRatio);
+  }
   
-  // Map internal quality (25-100) to compression ratio
-  const qualityNormalized = (internalQuality - 25) / 75; // 0 to 1
-  const compressionRatio = minRatio + (maxRatio - minRatio) * Math.pow(qualityNormalized, 1.5);
-  
+  // WebM (VP9) - good compression but can be larger than MP4
+  const minRatio = 0.10;
+  const maxRatio = 0.50;
+  const qualityNormalized = Math.max(0, (internalQuality - 25) / 75);
+  const compressionRatio = minRatio + (maxRatio - minRatio) * Math.pow(qualityNormalized, 1.4);
   return Math.round(originalSize * compressionRatio);
 }
 
@@ -82,11 +104,11 @@ export const QualitySettings = ({ settings, onChange, disabled, originalSize, fi
   const defaultFormat = fileType === 'image' ? 'webp' : 'webm';
   const currentFormat = settings.outputFormat || defaultFormat;
 
-  // Estimate file size based on quality
+  // Estimate file size based on quality and format
   const estimatedSize = useMemo(() => {
     if (!originalSize || settings.mode !== 'percentage') return null;
-    return estimateFileSize(originalSize, settings.percentage, currentFormat);
-  }, [originalSize, settings.percentage, settings.mode, currentFormat]);
+    return estimateFileSize(originalSize, settings.percentage, currentFormat, fileType);
+  }, [originalSize, settings.percentage, settings.mode, currentFormat, fileType]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

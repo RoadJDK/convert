@@ -87,12 +87,22 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
   const [trimEnd, setTrimEnd] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Custom aspect ratio input
-  const [customAspect, setCustomAspect] = useState('');
+  // Separate aspect ratio inputs
+  const [aspectWidth, setAspectWidth] = useState(0);
+  const [aspectHeight, setAspectHeight] = useState(0);
 
-  // Computed aspect ratio string
+  // Computed aspect ratio string for display
   const aspectRatioString = useMemo(() => {
     return getAspectRatioString(dimensions.width, dimensions.height);
+  }, [dimensions.width, dimensions.height]);
+
+  // Sync aspect ratio inputs when dimensions change
+  useEffect(() => {
+    if (dimensions.width > 0 && dimensions.height > 0) {
+      const divisor = gcd(Math.round(dimensions.width), Math.round(dimensions.height));
+      setAspectWidth(Math.round(dimensions.width / divisor));
+      setAspectHeight(Math.round(dimensions.height / divisor));
+    }
   }, [dimensions.width, dimensions.height]);
 
   // Load image or video
@@ -120,7 +130,8 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
       setCrop(undefined);
       setCompletedCrop(undefined);
       setIsPlaying(false);
-      setCustomAspect('');
+      setAspectWidth(0);
+      setAspectHeight(0);
     }
   }, [open]);
 
@@ -219,7 +230,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
     }
   }, [isPlaying, trimEnd, trimStart]);
 
-  // Live dimension change (updates while typing)
+  // Live dimension change (updates while typing) - also updates crop rectangle
   const handleDimensionChange = useCallback((key: 'width' | 'height', value: string) => {
     const num = parseInt(value, 10);
     if (isNaN(num) || num <= 0) {
@@ -228,42 +239,68 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
       return;
     }
 
+    let newDimensions = { ...dimensions };
     if (aspectLocked && originalDimensions.width > 0 && originalDimensions.height > 0) {
       const ratio = originalDimensions.width / originalDimensions.height;
       if (key === 'width') {
-        setDimensions({ width: num, height: Math.round(num / ratio) });
+        newDimensions = { width: num, height: Math.round(num / ratio) };
       } else {
-        setDimensions({ width: Math.round(num * ratio), height: num });
+        newDimensions = { width: Math.round(num * ratio), height: num };
       }
     } else {
-      setDimensions(prev => ({ ...prev, [key]: num }));
+      newDimensions = { ...dimensions, [key]: num };
     }
+    setDimensions(newDimensions);
 
-    // Auto-update crop aspect if locked
-    if (cropAspectLocked) {
-      applyCropAspectFromDimensions();
+    // Update crop rectangle to match new dimensions/aspect
+    if (originalDimensions.width > 0 && originalDimensions.height > 0 && newDimensions.width > 0 && newDimensions.height > 0) {
+      const newAspect = newDimensions.width / newDimensions.height;
+      const c = centerAspectCrop(originalDimensions.width, originalDimensions.height, newAspect);
+      setCrop(c);
     }
-  }, [aspectLocked, originalDimensions, cropAspectLocked]);
+  }, [aspectLocked, originalDimensions, dimensions]);
 
-  // Handle aspect ratio input change
-  const handleAspectRatioChange = useCallback((value: string) => {
-    setCustomAspect(value);
-    const match = value.match(/^(\d+):(\d+)$/);
-    if (match) {
-      const w = parseInt(match[1], 10);
-      const h = parseInt(match[2], 10);
-      if (w > 0 && h > 0) {
-        const newRatio = w / h;
-        const newWidth = dimensions.height * newRatio;
-        setDimensions({ width: Math.round(newWidth), height: dimensions.height });
-        
-        if (cropAspectLocked && originalDimensions.width > 0) {
-          const c = centerAspectCrop(originalDimensions.width, originalDimensions.height, newRatio);
-          setCrop(c);
-        }
+  // Handle aspect ratio width input change
+  const handleAspectWidthChange = useCallback((value: string) => {
+    const w = parseInt(value, 10);
+    if (isNaN(w) || w <= 0) {
+      setAspectWidth(parseInt(value, 10) || 0);
+      return;
+    }
+    setAspectWidth(w);
+    
+    if (aspectLocked && aspectHeight > 0) {
+      const newRatio = w / aspectHeight;
+      const newWidth = Math.round(dimensions.height * newRatio);
+      setDimensions({ width: newWidth, height: dimensions.height });
+      
+      if (cropAspectLocked && originalDimensions.width > 0) {
+        const c = centerAspectCrop(originalDimensions.width, originalDimensions.height, newRatio);
+        setCrop(c);
       }
     }
-  }, [dimensions.height, cropAspectLocked, originalDimensions]);
+  }, [aspectLocked, aspectHeight, dimensions.height, cropAspectLocked, originalDimensions]);
+
+  // Handle aspect ratio height input change
+  const handleAspectHeightChange = useCallback((value: string) => {
+    const h = parseInt(value, 10);
+    if (isNaN(h) || h <= 0) {
+      setAspectHeight(parseInt(value, 10) || 0);
+      return;
+    }
+    setAspectHeight(h);
+    
+    if (aspectLocked && aspectWidth > 0) {
+      const newRatio = aspectWidth / h;
+      const newHeight = Math.round(dimensions.width / newRatio);
+      setDimensions({ width: dimensions.width, height: newHeight });
+      
+      if (cropAspectLocked && originalDimensions.width > 0) {
+        const c = centerAspectCrop(originalDimensions.width, originalDimensions.height, newRatio);
+        setCrop(c);
+      }
+    }
+  }, [aspectLocked, aspectWidth, dimensions.width, cropAspectLocked, originalDimensions]);
 
   const applyCropAspectFromDimensions = useCallback(() => {
     if (originalDimensions.width <= 0 || originalDimensions.height <= 0) return;
@@ -280,6 +317,28 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
     setCropAspectLocked(next);
     if (next) applyCropAspectFromDimensions();
   }, [cropAspectLocked, applyCropAspectFromDimensions]);
+
+  // When crop is completed (mouse released), sync dimensions and aspect ratio
+  const handleCropComplete = useCallback((c: PixelCrop) => {
+    setCompletedCrop(c);
+    
+    // Calculate actual pixel dimensions from crop
+    let scaleX = 1, scaleY = 1;
+    if (file?.type === 'image' && imgRef.current) {
+      scaleX = imgRef.current.naturalWidth / imgRef.current.width;
+      scaleY = imgRef.current.naturalHeight / imgRef.current.height;
+    } else if (file?.type === 'video' && videoRef.current) {
+      scaleX = videoRef.current.videoWidth / videoRef.current.clientWidth;
+      scaleY = videoRef.current.videoHeight / videoRef.current.clientHeight;
+    }
+    
+    const cropWidth = Math.round(c.width * scaleX);
+    const cropHeight = Math.round(c.height * scaleY);
+    
+    if (cropWidth > 0 && cropHeight > 0) {
+      setDimensions({ width: cropWidth, height: cropHeight });
+    }
+  }, [file?.type]);
 
   const handleApply = () => {
     let cropArea: CropArea | undefined;
@@ -332,7 +391,8 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
     setDimensions(originalDimensions);
     setCrop(undefined);
     setCompletedCrop(undefined);
-    setCustomAspect('');
+    setAspectWidth(0);
+    setAspectHeight(0);
   }, [originalDimensions]);
 
   // Reset all
@@ -368,7 +428,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                 <ReactCrop
                   crop={crop}
                   onChange={(_, percentCrop) => setCrop(percentCrop)}
-                  onComplete={(c) => setCompletedCrop(c)}
+                  onComplete={handleCropComplete}
                   aspect={cropAspect}
                   className="max-h-[50vh]"
                 >
@@ -385,7 +445,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                 <ReactCrop
                   crop={crop}
                   onChange={(_, percentCrop) => setCrop(percentCrop)}
-                  onComplete={(c) => setCompletedCrop(c)}
+                  onComplete={handleCropComplete}
                   aspect={cropAspect}
                   className="max-h-[50vh]"
                 >
@@ -418,63 +478,100 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                   </Button>
                 </div>
 
-                {/* Start point slider */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs text-green-600">Start</Label>
-                    <span className="text-xs font-mono">{formatTime(trimStart)}</span>
+                {/* Unified timeline with markers */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={togglePlayPause}
+                      className="h-7 w-7 p-0"
+                      title={isPlaying ? 'Pause' : 'Play'}
+                    >
+                      {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    </Button>
+                    <span className="text-xs font-mono text-muted-foreground">{formatTime(currentTime)} / {formatTime(videoDuration)}</span>
                   </div>
-                  <Slider
-                    value={[trimStart]}
-                    onValueChange={handleTrimStartChange}
-                    min={0}
-                    max={videoDuration}
-                    step={0.1}
-                    className="w-full [&_[role=slider]]:bg-green-500"
-                  />
-                </div>
 
-                {/* Current position slider */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={togglePlayPause}
-                        className="h-6 w-6 p-0"
-                        title={isPlaying ? 'Pause' : 'Play'}
-                      >
-                        {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-                      </Button>
-                      <Label className="text-xs text-primary">Position</Label>
+                  {/* Visual timeline representation */}
+                  <div className="relative h-10 bg-muted/50 rounded-md overflow-hidden">
+                    {/* Trimmed region highlight */}
+                    <div 
+                      className="absolute top-0 bottom-0 bg-primary/20"
+                      style={{
+                        left: `${(trimStart / videoDuration) * 100}%`,
+                        width: `${((trimEnd - trimStart) / videoDuration) * 100}%`,
+                      }}
+                    />
+                    
+                    {/* Start handle */}
+                    <div 
+                      className="absolute top-0 bottom-0 w-1 bg-green-500 cursor-ew-resize z-10"
+                      style={{ left: `${(trimStart / videoDuration) * 100}%` }}
+                      title={`Start: ${formatTime(trimStart)}`}
+                    />
+                    
+                    {/* End handle */}
+                    <div 
+                      className="absolute top-0 bottom-0 w-1 bg-red-500 cursor-ew-resize z-10"
+                      style={{ left: `${(trimEnd / videoDuration) * 100}%` }}
+                      title={`Ende: ${formatTime(trimEnd)}`}
+                    />
+                    
+                    {/* Current position indicator */}
+                    <div 
+                      className="absolute top-0 bottom-0 w-0.5 bg-primary z-20"
+                      style={{ left: `${(currentTime / videoDuration) * 100}%` }}
+                    />
+                  </div>
+
+                  {/* Three separate sliders for better control */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs text-green-600">Start</Label>
+                        <span className="text-xs font-mono">{formatTime(trimStart)}</span>
+                      </div>
+                      <Slider
+                        value={[trimStart]}
+                        onValueChange={handleTrimStartChange}
+                        min={0}
+                        max={videoDuration}
+                        step={0.1}
+                        className="w-full [&_[role=slider]]:bg-green-500 [&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
+                      />
                     </div>
-                    <span className="text-xs font-mono">{formatTime(currentTime)}</span>
-                  </div>
-                  <Slider
-                    value={[currentTime]}
-                    onValueChange={handleCurrentTimeChange}
-                    min={0}
-                    max={videoDuration}
-                    step={0.1}
-                    className="w-full"
-                  />
-                </div>
 
-                {/* End point slider */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs text-red-600">Ende</Label>
-                    <span className="text-xs font-mono">{formatTime(trimEnd)}</span>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs text-primary">Position</Label>
+                        <span className="text-xs font-mono">{formatTime(currentTime)}</span>
+                      </div>
+                      <Slider
+                        value={[currentTime]}
+                        onValueChange={handleCurrentTimeChange}
+                        min={0}
+                        max={videoDuration}
+                        step={0.1}
+                        className="w-full [&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs text-red-600">Ende</Label>
+                        <span className="text-xs font-mono">{formatTime(trimEnd)}</span>
+                      </div>
+                      <Slider
+                        value={[trimEnd]}
+                        onValueChange={handleTrimEndChange}
+                        min={0}
+                        max={videoDuration}
+                        step={0.1}
+                        className="w-full [&_[role=slider]]:bg-red-500 [&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
+                      />
+                    </div>
                   </div>
-                  <Slider
-                    value={[trimEnd]}
-                    onValueChange={handleTrimEndChange}
-                    min={0}
-                    max={videoDuration}
-                    step={0.1}
-                    className="w-full [&_[role=slider]]:bg-red-500"
-                  />
                 </div>
 
                 <p className="text-xs text-muted-foreground text-center">
@@ -500,18 +597,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm">Größe (px)</Label>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setAspectLocked(!aspectLocked)}
-                  className={aspectLocked ? 'text-primary' : 'text-muted-foreground'}
-                  title={aspectLocked ? 'Seitenverhältnis gesperrt' : 'Seitenverhältnis frei'}
-                >
-                  {aspectLocked ? <Link2 className="h-4 w-4" /> : <Unlink2 className="h-4 w-4" />}
-                </Button>
-              </div>
+              <Label className="text-sm">Größe (px)</Label>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Breite</Label>
@@ -532,18 +618,39 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
               </div>
             </div>
 
-            {/* Aspect Ratio */}
+            {/* Aspect Ratio - Split into two inputs */}
             <div className="space-y-2">
-              <Label className="text-xs">Seitenverhältnis</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Seitenverhältnis</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAspectLocked(!aspectLocked)}
+                  className={aspectLocked ? 'text-primary h-6 px-2' : 'text-muted-foreground h-6 px-2'}
+                  title={aspectLocked ? 'Verhältnis gelinkt' : 'Verhältnis frei'}
+                >
+                  {aspectLocked ? <Link2 className="h-3 w-3" /> : <Unlink2 className="h-3 w-3" />}
+                </Button>
+              </div>
               <div className="flex items-center gap-2">
                 <Input
-                  type="text"
-                  value={customAspect || aspectRatioString}
-                  onChange={(e) => handleAspectRatioChange(e.target.value)}
-                  placeholder="16:9"
-                  className="h-8 text-sm w-20"
+                  type="number"
+                  value={aspectWidth || ''}
+                  onChange={(e) => handleAspectWidthChange(e.target.value)}
+                  placeholder="16"
+                  className="h-8 text-sm w-16 text-center"
+                  min={1}
                 />
-                <span className="text-xs text-muted-foreground">
+                <span className="text-muted-foreground font-medium">:</span>
+                <Input
+                  type="number"
+                  value={aspectHeight || ''}
+                  onChange={(e) => handleAspectHeightChange(e.target.value)}
+                  placeholder="9"
+                  className="h-8 text-sm w-16 text-center"
+                  min={1}
+                />
+                <span className="text-xs text-muted-foreground ml-2">
                   Original: {getAspectRatioString(originalDimensions.width, originalDimensions.height)}
                 </span>
               </div>
@@ -578,8 +685,8 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={handleResetAll}>
-            Alles zurücksetzen
+          <Button variant="outline" onClick={onClose}>
+            Abbrechen
           </Button>
           <Button onClick={handleApply}>
             Anwenden
