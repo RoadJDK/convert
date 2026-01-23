@@ -1,11 +1,11 @@
 import { useCallback, useState, useEffect } from 'react';
-import { Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop, Sparkles } from 'lucide-react';
+import { Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop, Sparkles, Image, Film } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { ConvertibleFile, getOutputExtension, formatFileSize, QualitySettings } from '@/types/converter';
+import { ConvertibleFile, getOutputExtension, formatFileSize, QualitySettings, FileType } from '@/types/converter';
 import { QualitySettings as QualitySettingsComponent } from './QualitySettings';
 import { CompressionStats } from './CompressionStats';
 
@@ -19,8 +19,6 @@ interface FileCardProps {
   onCropClick: () => void;
   onAIRename?: () => void;
   isAIRenaming?: boolean;
-  renameHelperEnabled: boolean;
-  onToggleRenameHelper?: (enabled: boolean) => void;
   selected?: boolean;
   onSelectChange?: (selected: boolean) => void;
   showCheckbox?: boolean;
@@ -37,7 +35,6 @@ export const FileCard = ({
   onCropClick,
   onAIRename,
   isAIRenaming,
-  renameHelperEnabled,
   selected = false,
   onSelectChange,
   showCheckbox = false,
@@ -106,24 +103,37 @@ export const FileCard = ({
           </div>
         )}
 
-        {/* Preview/Icon */}
-        <div
-          className={cn(
-            'flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-lg overflow-hidden',
-            file.type === 'image' ? 'bg-primary/20' : 'bg-accent/20'
-          )}
-        >
-          {showPreview ? (
-            <img
-              src={showPreview}
-              alt={file.originalName}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-accent">
-              <Play className="h-5 w-5 sm:h-6 sm:w-6" />
-            </div>
-          )}
+        {/* Preview/Icon with File Type Badge */}
+        <div className="relative">
+          <div
+            className={cn(
+              'flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-lg overflow-hidden',
+              file.type === 'image' ? 'bg-primary/20' : 'bg-accent/20'
+            )}
+          >
+            {showPreview ? (
+              <img
+                src={showPreview}
+                alt={file.originalName}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-accent">
+                <Play className="h-5 w-5 sm:h-6 sm:w-6" />
+              </div>
+            )}
+          </div>
+          {/* File Type Icon Badge */}
+          <div className={cn(
+            'absolute -top-1 -left-1 rounded-full p-0.5',
+            file.type === 'image' ? 'bg-primary text-primary-foreground' : 'bg-accent text-accent-foreground'
+          )}>
+            {file.type === 'image' ? (
+              <Image className="h-3 w-3" />
+            ) : (
+              <Film className="h-3 w-3" />
+            )}
+          </div>
         </div>
 
         {/* Info */}
@@ -207,7 +217,7 @@ export const FileCard = ({
           )}
 
           {/* Rename hint */}
-          {renameHelperEnabled && file.suggestedName && file.status === 'completed' && (
+          {file.suggestedName && file.status === 'completed' && (
             <div className="mt-2 flex items-center gap-2 rounded-md bg-primary/10 px-2 py-1">
               <span className="text-xs text-primary">
                 ✨ KI-Vorschlag angewendet
@@ -224,6 +234,7 @@ export const FileCard = ({
                 <QualitySettingsComponent
                   settings={file.qualitySettings}
                   onChange={onSettingsChange}
+                  originalSize={file.originalSize}
                 />
                 <Button
                   size="sm"
@@ -234,7 +245,7 @@ export const FileCard = ({
                 >
                   <Crop className="h-4 w-4" />
                 </Button>
-                {onAIRename && renameHelperEnabled && (
+                {onAIRename && (
                   <Button
                     size="sm"
                     variant="ghost"

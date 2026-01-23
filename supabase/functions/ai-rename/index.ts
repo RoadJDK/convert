@@ -185,8 +185,8 @@ Reply ONLY with the new filename, nothing else.`
     let model = "llama-3.3-70b-versatile"; // Default text model
     
     if (imageData && fileType === 'image') {
-      // Use Groq's vision model with image
-      model = "llama-3.2-90b-vision-preview";
+      // Use Groq's vision model with image - using llama-4-scout for vision capability
+      model = "meta-llama/llama-4-scout-17b-16e-instruct";
       messages.push({
         role: "user",
         content: [

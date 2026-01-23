@@ -11,7 +11,7 @@ import { useAIRename } from '@/hooks/useAIRename';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Play, Trash2 } from 'lucide-react';
-import { ConvertibleFile, CropArea, QualitySettings, TrimRange } from '@/types/converter';
+import { ConvertibleFile, CropArea, QualitySettings, TrimRange, FileType } from '@/types/converter';
 
 const Index = () => {
   const { 
@@ -29,7 +29,7 @@ const Index = () => {
   } = useFileConverter();
   
   const { generateName, isLoading: aiRenameLoading } = useAIRename();
-  const [renameHelperEnabled, setRenameHelperEnabled] = useState(false);
+  
   const [cropDialogFile, setCropDialogFile] = useState<ConvertibleFile | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -38,6 +38,13 @@ const Index = () => {
     selectedIds.filter(id => pendingFiles.some(f => f.id === id)), 
     [selectedIds, pendingFiles]
   );
+  
+  // Determine the type of currently selected files (for exclusive selection)
+  const selectedFileType = useMemo((): FileType | null => {
+    if (selectedPendingIds.length === 0) return null;
+    const firstSelected = pendingFiles.find(f => selectedPendingIds.includes(f.id));
+    return firstSelected?.type || null;
+  }, [selectedPendingIds, pendingFiles]);
 
   const handleFilesAdded = useCallback(
     (newFiles: File[]) => {
@@ -80,18 +87,37 @@ const Index = () => {
   }, [selectedPendingIds, updateBulkSettings]);
 
   const handleSelectFile = useCallback((fileId: string, selected: boolean) => {
-    setSelectedIds(prev => 
-      selected ? [...prev, fileId] : prev.filter(id => id !== fileId)
-    );
-  }, []);
+    if (!selected) {
+      // Deselecting is always allowed
+      setSelectedIds(prev => prev.filter(id => id !== fileId));
+      return;
+    }
+    
+    // Get the type of the file being selected
+    const fileToSelect = pendingFiles.find(f => f.id === fileId);
+    if (!fileToSelect) return;
+    
+    // If there are already selected files of a different type, clear them first
+    if (selectedFileType && selectedFileType !== fileToSelect.type) {
+      // Clear selection and select only this new file
+      setSelectedIds([fileId]);
+    } else {
+      // Same type or no selection yet, add to selection
+      setSelectedIds(prev => [...prev, fileId]);
+    }
+  }, [pendingFiles, selectedFileType]);
 
   const handleSelectAll = useCallback(() => {
-    if (selectedPendingIds.length === pendingFiles.length) {
+    // Select all of the same type as currently selected, or all images if nothing selected
+    const targetType = selectedFileType || 'image';
+    const filesOfType = pendingFiles.filter(f => f.type === targetType);
+    
+    if (selectedPendingIds.length === filesOfType.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(pendingFiles.map(f => f.id));
+      setSelectedIds(filesOfType.map(f => f.id));
     }
-  }, [selectedPendingIds.length, pendingFiles]);
+  }, [selectedPendingIds.length, pendingFiles, selectedFileType]);
 
   const handleClearSelection = useCallback(() => {
     setSelectedIds([]);
@@ -173,8 +199,6 @@ const Index = () => {
               onClear={handleClearSelection}
               onAIRenameAll={handleAIRenameSelected}
               isAIRenaming={isAnyAIRenaming}
-              renameHelperEnabled={renameHelperEnabled}
-              onToggleRenameHelper={setRenameHelperEnabled}
             />
           )}
 
@@ -205,8 +229,6 @@ const Index = () => {
                 onCropClick={() => setCropDialogFile(file)}
                 onAIRename={() => handleAIRename(file)}
                 isAIRenaming={aiRenameLoading[file.id]}
-                renameHelperEnabled={renameHelperEnabled}
-                onToggleRenameHelper={setRenameHelperEnabled}
                 selected={selectedIds.includes(file.id)}
                 onSelectChange={(selected) => handleSelectFile(file.id, selected)}
                 showCheckbox={file.status === 'pending'}
