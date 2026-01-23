@@ -1,12 +1,30 @@
-import { useState, useCallback } from 'react';
-import { ConvertibleFile, getFileType, getOutputExtension, QualitySettings, CropArea, DEFAULT_QUALITY_SETTINGS } from '@/types/converter';
+import { useState, useCallback, useEffect } from 'react';
+import { ConvertibleFile, getFileType, getOutputExtension, QualitySettings, CropArea, TrimRange, DEFAULT_QUALITY_SETTINGS } from '@/types/converter';
 import { useImageConverter } from './useImageConverter';
 import { useVideoConverter } from './useVideoConverter';
 
 export const useFileConverter = () => {
   const [files, setFiles] = useState<ConvertibleFile[]>([]);
+  const [videoPreviews, setVideoPreviews] = useState<Record<string, string>>({});
   const { convertToWebP } = useImageConverter();
-  const { convertToWebM } = useVideoConverter();
+  const { convertToWebM, extractFrame } = useVideoConverter();
+
+  // Extract video previews
+  useEffect(() => {
+    const extractPreviews = async () => {
+      for (const file of files) {
+        if (file.type === 'video' && !videoPreviews[file.id]) {
+          try {
+            const preview = await extractFrame(file.file, 0);
+            setVideoPreviews(prev => ({ ...prev, [file.id]: preview }));
+          } catch (e) {
+            console.error('Failed to extract video frame:', e);
+          }
+        }
+      }
+    };
+    extractPreviews();
+  }, [files, extractFrame, videoPreviews]);
 
   const addFiles = useCallback((newFiles: File[]) => {
     const convertibleFiles: ConvertibleFile[] = newFiles
@@ -41,10 +59,14 @@ export const useFileConverter = () => {
     updateFile(id, { qualitySettings });
   }, [updateFile]);
 
-  const updateFileCrop = useCallback((id: string, cropArea: CropArea | undefined, dimensions?: { width: number; height: number }) => {
-    const updates: Partial<ConvertibleFile> = { cropArea };
+  const updateFileCrop = useCallback((
+    id: string, 
+    cropArea: CropArea | undefined, 
+    dimensions?: { width: number; height: number },
+    trimRange?: TrimRange
+  ) => {
+    const updates: Partial<ConvertibleFile> = { cropArea, trimRange };
     if (dimensions) {
-      // Store dimensions in a way that the converter can use
       (updates as any).dimensions = dimensions;
     }
     updateFile(id, updates);
@@ -73,6 +95,7 @@ export const useFileConverter = () => {
           qualitySettings: fileItem.qualitySettings,
           cropArea: fileItem.cropArea,
           dimensions: (fileItem as any).dimensions,
+          trimRange: fileItem.trimRange,
         };
 
         let result: { blob: Blob; url: string };
@@ -108,6 +131,10 @@ export const useFileConverter = () => {
       }
       return prev.filter((f) => f.id !== id);
     });
+    setVideoPreviews(prev => {
+      const { [id]: _, ...rest } = prev;
+      return rest;
+    });
   }, []);
 
   const clearAllFiles = useCallback(() => {
@@ -119,6 +146,7 @@ export const useFileConverter = () => {
       });
       return [];
     });
+    setVideoPreviews({});
   }, []);
 
   const downloadFile = useCallback((fileItem: ConvertibleFile, customName?: string) => {
@@ -142,6 +170,7 @@ export const useFileConverter = () => {
 
   return {
     files,
+    videoPreviews,
     addFiles,
     convertFile,
     removeFile,

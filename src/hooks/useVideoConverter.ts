@@ -1,12 +1,13 @@
 import { useCallback, useRef } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
-import { QualitySettings, CropArea } from '@/types/converter';
+import { QualitySettings, CropArea, TrimRange, displayedToInternalQuality } from '@/types/converter';
 
 interface ConversionOptions {
   qualitySettings: QualitySettings;
   cropArea?: CropArea;
   dimensions?: { width: number; height: number };
+  trimRange?: TrimRange;
 }
 
 export const useVideoConverter = () => {
@@ -52,10 +53,16 @@ export const useVideoConverter = () => {
         onProgress(Math.min(adjustedProgress, 90));
       });
 
-      const { qualitySettings, cropArea, dimensions } = options;
+      const { qualitySettings, cropArea, dimensions, trimRange } = options;
 
       // Build FFmpeg arguments
       const args: string[] = ['-i', inputName];
+
+      // Trim settings (before filters)
+      if (trimRange) {
+        args.push('-ss', trimRange.start.toString());
+        args.push('-to', trimRange.end.toString());
+      }
 
       // Build filter complex for crop and scale
       const filters: string[] = [];
@@ -64,31 +71,54 @@ export const useVideoConverter = () => {
         filters.push(`crop=${cropArea.width}:${cropArea.height}:${cropArea.x}:${cropArea.y}`);
       }
 
-      if (dimensions) {
-        filters.push(`scale=${dimensions.width}:${dimensions.height}`);
+      // Apply scale factor
+      const scale = qualitySettings.scale / 100;
+      if (scale !== 1 || dimensions) {
+        let targetWidth = dimensions?.width ?? -1;
+        let targetHeight = dimensions?.height ?? -1;
+        
+        if (scale !== 1 && !dimensions) {
+          // Use scale filter for scaling
+          filters.push(`scale=iw*${scale}:ih*${scale}`);
+        } else if (dimensions) {
+          filters.push(`scale=${targetWidth}:${targetHeight}`);
+        }
       }
 
       if (filters.length > 0) {
         args.push('-vf', filters.join(','));
       }
 
-      // Quality settings
+      // Quality settings - using VP9 codec which is better supported
       if (qualitySettings.mode === 'percentage') {
-        // Map percentage to CRF (lower CRF = better quality)
-        // 100% -> CRF 10, 10% -> CRF 50
-        const crf = Math.round(50 - (qualitySettings.percentage / 100) * 40);
-        args.push('-c:v', 'libvpx', '-crf', crf.toString(), '-b:v', '0');
+        // Convert displayed percentage to internal quality
+        const internalQuality = displayedToInternalQuality(qualitySettings.percentage);
+        // Map internal quality (50-100) to CRF (40-20)
+        // Higher internal quality = lower CRF = better quality
+        const crf = Math.round(40 - (internalQuality / 100) * 20);
+        args.push('-c:v', 'libvpx-vp9', '-crf', crf.toString(), '-b:v', '0');
       } else {
         // Target bitrate based on max size
         // Estimate: target_bitrate = (target_size_kb * 8) / duration_seconds
-        // We'll use a rough estimate assuming 30 seconds
+        // Use a rough estimate assuming 30 seconds
         const targetBitrate = Math.round((qualitySettings.maxSizeKB * 8) / 30);
-        args.push('-c:v', 'libvpx', '-b:v', `${targetBitrate}k`);
+        args.push('-c:v', 'libvpx-vp9', '-b:v', `${targetBitrate}k`);
       }
 
-      args.push('-c:a', 'libvorbis', '-q:a', '4', outputName);
+      // Audio codec
+      args.push('-c:a', 'libopus', '-b:a', '128k');
+      
+      // Output
+      args.push(outputName);
 
-      await ffmpeg.exec(args);
+      console.log('FFmpeg args:', args);
+
+      try {
+        await ffmpeg.exec(args);
+      } catch (execError) {
+        console.error('FFmpeg exec error:', execError);
+        throw new Error('Video conversion failed');
+      }
 
       onProgress(95);
 
@@ -108,5 +138,73 @@ export const useVideoConverter = () => {
     [loadFFmpeg]
   );
 
-  return { convertToWebM };
+  // Extract first frame as preview
+  const extractFrame = useCallback(
+    async (file: File, timeSeconds: number = 0): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.muted = true;
+        video.playsInline = true;
+
+        const url = URL.createObjectURL(file);
+        video.src = url;
+
+        video.onloadedmetadata = () => {
+          video.currentTime = Math.min(timeSeconds, video.duration);
+        };
+
+        video.onseeked = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            URL.revokeObjectURL(url);
+            reject(new Error('Could not get canvas context'));
+            return;
+          }
+          
+          ctx.drawImage(video, 0, 0);
+          const frameDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          
+          URL.revokeObjectURL(url);
+          resolve(frameDataUrl);
+        };
+
+        video.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('Failed to load video'));
+        };
+      });
+    },
+    []
+  );
+
+  // Get video duration
+  const getVideoDuration = useCallback(
+    async (file: File): Promise<number> => {
+      return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        
+        const url = URL.createObjectURL(file);
+        video.src = url;
+
+        video.onloadedmetadata = () => {
+          URL.revokeObjectURL(url);
+          resolve(video.duration);
+        };
+
+        video.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('Failed to load video'));
+        };
+      });
+    },
+    []
+  );
+
+  return { convertToWebM, extractFrame, getVideoDuration };
 };

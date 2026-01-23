@@ -6,7 +6,7 @@ export type QualityMode = 'percentage' | 'maxSize';
 
 export interface QualitySettings {
   mode: QualityMode;
-  percentage: number; // 1-100
+  percentage: number; // 50-200 (displayed as 100-400%, internally 50% = 100% displayed)
   maxSizeKB: number; // in KB
   scale: number; // 10-200 (percentage of original size)
 }
@@ -16,6 +16,11 @@ export interface CropArea {
   y: number;
   width: number;
   height: number;
+}
+
+export interface TrimRange {
+  start: number; // in seconds
+  end: number; // in seconds
 }
 
 export interface ConvertibleFile {
@@ -29,16 +34,18 @@ export interface ConvertibleFile {
   convertedBlob?: Blob;
   convertedUrl?: string;
   error?: string;
-  // New fields
   qualitySettings: QualitySettings;
   cropArea?: CropArea;
   originalSize: number;
   convertedSize?: number;
+  // Video-specific
+  trimRange?: TrimRange;
+  videoDuration?: number;
 }
 
 export const DEFAULT_QUALITY_SETTINGS: QualitySettings = {
   mode: 'percentage',
-  percentage: 100,
+  percentage: 100, // Displayed as 100%, internally maps to 50% quality
   maxSizeKB: 500,
   scale: 100,
 };
@@ -85,4 +92,16 @@ export const formatFileSize = (bytes: number): string => {
 export const calculateSizeChange = (original: number, converted: number): { percentage: number; isSmaller: boolean } => {
   const percentage = ((original - converted) / original) * 100;
   return { percentage: Math.abs(percentage), isSmaller: converted < original };
+};
+
+// Convert displayed percentage (100-200) to internal quality (50-100)
+export const displayedToInternalQuality = (displayed: number): number => {
+  // 100% displayed = 50% internal
+  // 200% displayed = 100% internal
+  return displayed / 2;
+};
+
+// Convert internal quality (50-100) to displayed percentage (100-200)
+export const internalToDisplayedQuality = (internal: number): number => {
+  return internal * 2;
 };

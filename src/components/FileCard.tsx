@@ -24,6 +24,7 @@ interface FileCardProps {
   selected?: boolean;
   onSelectChange?: (selected: boolean) => void;
   showCheckbox?: boolean;
+  videoPreviewUrl?: string;
 }
 
 export const FileCard = ({
@@ -40,6 +41,7 @@ export const FileCard = ({
   selected = false,
   onSelectChange,
   showCheckbox = false,
+  videoPreviewUrl,
 }: FileCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
@@ -88,6 +90,9 @@ export const FileCard = ({
   // Hide individual action buttons when file is selected (in group)
   const showIndividualActions = !selected;
 
+  // Determine preview to show
+  const showPreview = file.type === 'image' ? previewUrl : videoPreviewUrl;
+
   return (
     <div className="group rounded-xl bg-card p-3 sm:p-4 shadow-soft transition-all duration-200 hover:shadow-lifted">
       <div className="flex items-start gap-3 sm:gap-4">
@@ -108,9 +113,9 @@ export const FileCard = ({
             file.type === 'image' ? 'bg-primary/20' : 'bg-accent/20'
           )}
         >
-          {previewUrl && file.type === 'image' ? (
+          {showPreview ? (
             <img
-              src={previewUrl}
+              src={showPreview}
               alt={file.originalName}
               className="h-full w-full object-cover"
             />
@@ -158,6 +163,9 @@ export const FileCard = ({
             {formatFileSize(file.file.size)}
             {file.cropArea && (
               <span className="ml-2 text-primary">• Zugeschnitten</span>
+            )}
+            {file.trimRange && (
+              <span className="ml-2 text-accent">• Geschnitten</span>
             )}
             {file.qualitySettings.scale !== 100 && (
               <span className="ml-2 text-accent">• {file.qualitySettings.scale}%</span>
@@ -220,17 +228,15 @@ export const FileCard = ({
                   settings={file.qualitySettings}
                   onChange={onSettingsChange}
                 />
-                {file.type === 'image' && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={onCropClick}
-                    className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                    title="Zuschneiden"
-                  >
-                    <Crop className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onCropClick}
+                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                  title="Zuschneiden"
+                >
+                  <Crop className="h-4 w-4" />
+                </Button>
                 {onAIRename && (
                   <Button
                     size="sm"

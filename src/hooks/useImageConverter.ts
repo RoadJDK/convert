@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { QualitySettings, CropArea } from '@/types/converter';
+import { QualitySettings, CropArea, displayedToInternalQuality } from '@/types/converter';
 
 interface ConversionResult {
   blob: Blob;
@@ -74,10 +74,12 @@ export const useImageConverter = () => {
           onProgress(60);
 
           if (qualitySettings.mode === 'percentage') {
-            // Direct quality conversion
-            // IMPORTANT: WebP at 100% uses lossless mode which can be LARGER than the original
-            // Cap at 0.92 for best quality lossy compression (visually identical)
-            const quality = Math.min(qualitySettings.percentage / 100, 0.92);
+            // Convert displayed percentage to internal quality
+            // 100% displayed = 50% internal = 0.5 quality
+            // 200% displayed = 100% internal = capped at 0.92
+            const internalQuality = displayedToInternalQuality(qualitySettings.percentage);
+            const quality = Math.min(internalQuality / 100, 0.92);
+            
             canvas.toBlob(
               (blob) => {
                 if (blob) {
@@ -95,7 +97,7 @@ export const useImageConverter = () => {
             // Binary search for target file size
             const targetBytes = qualitySettings.maxSizeKB * 1024;
             let minQ = 0.1;
-            let maxQ = 1.0;
+            let maxQ = 0.92;
             let bestBlob: Blob | null = null;
             let iterations = 0;
             const maxIterations = 8;

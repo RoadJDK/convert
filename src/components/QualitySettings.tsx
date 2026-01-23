@@ -36,6 +36,9 @@ export const QualitySettings = ({ settings, onChange, disabled }: QualitySetting
     onChange({ ...settings, scale: value[0] });
   };
 
+  // Display percentage (100% = internal 50%, 200% = internal 100%)
+  const displayPercentage = settings.percentage;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -67,18 +70,18 @@ export const QualitySettings = ({ settings, onChange, disabled }: QualitySetting
             <TabsContent value="percentage" className="mt-4 space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-xs">Qualität</Label>
-                <span className="text-sm font-medium">{settings.percentage}%</span>
+                <span className="text-sm font-medium">{displayPercentage}%</span>
               </div>
               <Slider
                 value={[settings.percentage]}
                 onValueChange={handlePercentageChange}
-                min={10}
-                max={100}
-                step={5}
+                min={50}
+                max={200}
+                step={10}
                 className="w-full"
               />
               <p className="text-xs text-muted-foreground">
-                Niedrigere Werte = kleinere Dateien, weniger Qualität
+                100% = Standard • 200% = Maximum
               </p>
             </TabsContent>
             
