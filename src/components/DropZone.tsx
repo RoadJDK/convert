@@ -99,11 +99,11 @@ export const DropZone = ({ onFilesAdded }: DropZoneProps) => {
       <div className="flex items-center gap-6 text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
           <Image className="h-4 w-4" />
-          <span>PNG, JPG, GIF, BMP → WebP</span>
+          <span>Bilder</span>
         </div>
         <div className="flex items-center gap-2">
           <Video className="h-4 w-4" />
-          <span>MP4, MOV, AVI → WebM</span>
+          <span>Videos</span>
         </div>
       </div>
     </div>

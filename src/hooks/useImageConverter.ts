@@ -10,6 +10,7 @@ interface ConversionOptions {
   qualitySettings: QualitySettings;
   cropArea?: CropArea;
   dimensions?: { width: number; height: number };
+  addWhiteBackground?: boolean; // For converting transparent images to non-transparent formats
 }
 
 export const useImageConverter = () => {
@@ -33,7 +34,7 @@ export const useImageConverter = () => {
         img.onload = async () => {
           onProgress(40);
 
-          const { qualitySettings, cropArea, dimensions } = options;
+          const { qualitySettings, cropArea, dimensions, addWhiteBackground } = options;
           
           // Determine output format and mime type
           const outputFormat = (qualitySettings.outputFormat as ImageOutputFormat) || 'webp';
@@ -73,6 +74,12 @@ export const useImageConverter = () => {
           // Use high-quality image scaling
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = 'high';
+
+          // Add white background if needed (for transparent images to non-transparent formats)
+          if (addWhiteBackground) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, targetWidth, targetHeight);
+          }
 
           ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
           onProgress(60);
