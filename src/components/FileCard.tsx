@@ -1,9 +1,10 @@
-import { useCallback, useState, useMemo, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { ConvertibleFile, getOutputExtension, formatFileSize, QualitySettings } from '@/types/converter';
 import { QualitySettings as QualitySettingsComponent } from './QualitySettings';
@@ -20,6 +21,7 @@ interface FileCardProps {
   onAIRename?: () => void;
   isAIRenaming?: boolean;
   renameHelperEnabled: boolean;
+  onToggleRenameHelper?: (enabled: boolean) => void;
   selected?: boolean;
   onSelectChange?: (selected: boolean) => void;
   showCheckbox?: boolean;
@@ -36,6 +38,7 @@ export const FileCard = ({
   onAIRename,
   isAIRenaming,
   renameHelperEnabled,
+  onToggleRenameHelper,
   selected = false,
   onSelectChange,
   showCheckbox = false,
@@ -83,6 +86,9 @@ export const FileCard = ({
     },
     [handleSaveEdit]
   );
+
+  // Hide individual action buttons when file is selected (in group)
+  const showIndividualActions = !selected;
 
   return (
     <div className="group rounded-xl bg-card p-4 shadow-soft transition-all duration-200 hover:shadow-lifted">
@@ -154,6 +160,9 @@ export const FileCard = ({
             {file.cropArea && (
               <span className="ml-2 text-primary">• Zugeschnitten</span>
             )}
+            {file.qualitySettings.scale !== 100 && (
+              <span className="ml-2 text-accent">• {file.qualitySettings.scale}% Skalierung</span>
+            )}
           </p>
 
           {/* Quality indicator for pending files */}
@@ -165,7 +174,7 @@ export const FileCard = ({
             </p>
           )}
 
-          {/* Progress */}
+          {/* Progress Bar during conversion */}
           {file.status === 'converting' && (
             <div className="mt-3">
               <Progress value={file.progress} className="h-2" />
@@ -205,7 +214,7 @@ export const FileCard = ({
 
         {/* Actions */}
         <div className="flex shrink-0 items-center gap-1">
-          {file.status === 'pending' && (
+          {file.status === 'pending' && showIndividualActions && (
             <>
               <QualitySettingsComponent
                 settings={file.qualitySettings}
@@ -222,13 +231,18 @@ export const FileCard = ({
                   <Crop className="h-4 w-4" />
                 </Button>
               )}
-              {renameHelperEnabled && onAIRename && (
+              {onAIRename && (
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={onAIRename}
-                  disabled={isAIRenaming}
-                  className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+                  disabled={isAIRenaming || !renameHelperEnabled}
+                  className={cn(
+                    "h-8 w-8 p-0",
+                    renameHelperEnabled 
+                      ? "text-primary hover:text-primary/80" 
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
                   title="KI-Umbenennung"
                 >
                   {isAIRenaming ? (
@@ -247,6 +261,12 @@ export const FileCard = ({
                 Start
               </Button>
             </>
+          )}
+
+          {file.status === 'pending' && !showIndividualActions && (
+            <span className="text-xs text-muted-foreground italic">
+              Gruppenauswahl aktiv
+            </span>
           )}
 
           {file.status === 'converting' && (

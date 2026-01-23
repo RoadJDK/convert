@@ -35,21 +35,26 @@ export const useImageConverter = () => {
 
           const { qualitySettings, cropArea, dimensions } = options;
 
-          // Calculate final dimensions
-          let targetWidth = cropArea ? cropArea.width : img.width;
-          let targetHeight = cropArea ? cropArea.height : img.height;
-          
-          // Source coordinates for cropping
+          // Calculate source dimensions (for cropping)
           const sx = cropArea?.x ?? 0;
           const sy = cropArea?.y ?? 0;
           const sWidth = cropArea?.width ?? img.width;
           const sHeight = cropArea?.height ?? img.height;
+
+          // Calculate final dimensions with scale
+          let targetWidth = cropArea ? cropArea.width : img.width;
+          let targetHeight = cropArea ? cropArea.height : img.height;
 
           // Apply custom dimensions if set
           if (dimensions) {
             targetWidth = dimensions.width;
             targetHeight = dimensions.height;
           }
+
+          // Apply scale factor
+          const scale = qualitySettings.scale / 100;
+          targetWidth = Math.round(targetWidth * scale);
+          targetHeight = Math.round(targetHeight * scale);
 
           const canvas = document.createElement('canvas');
           canvas.width = targetWidth;
@@ -60,6 +65,10 @@ export const useImageConverter = () => {
             reject(new Error('Failed to create canvas context'));
             return;
           }
+
+          // Use high-quality image scaling
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
 
           ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
           onProgress(60);

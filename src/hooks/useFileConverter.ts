@@ -110,6 +110,17 @@ export const useFileConverter = () => {
     });
   }, []);
 
+  const clearAllFiles = useCallback(() => {
+    setFiles((prev) => {
+      prev.forEach((file) => {
+        if (file.convertedUrl) {
+          URL.revokeObjectURL(file.convertedUrl);
+        }
+      });
+      return [];
+    });
+  }, []);
+
   const downloadFile = useCallback((fileItem: ConvertibleFile, customName?: string) => {
     if (!fileItem.convertedUrl) return;
 
@@ -134,6 +145,7 @@ export const useFileConverter = () => {
     addFiles,
     convertFile,
     removeFile,
+    clearAllFiles,
     downloadFile,
     updateFileName,
     updateFileSettings,
