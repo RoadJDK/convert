@@ -9,7 +9,6 @@ import { DownloadDropdown } from '@/components/DownloadDropdown';
 import { SelectAllControls } from '@/components/SelectAllControls';
 import { useFileConverter } from '@/hooks/useFileConverter';
 import { useAIRename } from '@/hooks/useAIRename';
-import { useBackgroundRemoval } from '@/hooks/useBackgroundRemoval';
 import { Button } from '@/components/ui/button';
 import { Play, Trash2 } from 'lucide-react';
 import { ConvertibleFile, CropArea, QualitySettings, TrimRange, FileType } from '@/types/converter';
@@ -28,11 +27,10 @@ const Index = () => {
     updateFileCrop,
     updateBulkSettings,
     clearAllFiles,
-    replaceFileWithNew,
+    updateFile,
   } = useFileConverter();
   
   const { generateName, isLoading: aiRenameLoading } = useAIRename();
-  const { removeBackgroundFromFile, isProcessing: isBgRemoving, getProgress: getBgProgress, removalState } = useBackgroundRemoval();
   
   const [cropDialogFile, setCropDialogFile] = useState<ConvertibleFile | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -143,13 +141,9 @@ const Index = () => {
     }
   }, [pendingFiles, selectedPendingIds, handleAIRename]);
 
-  const handleRemoveBackground = useCallback(async (file: ConvertibleFile) => {
-    if (file.type !== 'image') return;
-    const newFile = await removeBackgroundFromFile(file.id, file.file);
-    if (newFile) {
-      replaceFileWithNew(file.id, newFile);
-    }
-  }, [removeBackgroundFromFile, replaceFileWithNew]);
+  const handleToggleRemoveBackground = useCallback((fileId: string, enabled: boolean) => {
+    updateFile(fileId, { removeBackground: enabled });
+  }, [updateFile]);
 
   const pendingCount = files.filter((f) => f.status === 'pending').length;
   const completedCount = files.filter((f) => f.status === 'completed').length;
@@ -246,9 +240,8 @@ const Index = () => {
                 showCheckbox={file.status === 'pending'}
                 videoPreviewUrl={videoPreviews[file.id]}
                 onReset={() => resetFile(file.id)}
-                onRemoveBackground={() => handleRemoveBackground(file)}
-                isRemovingBackground={isBgRemoving(file.id)}
-                backgroundRemovalProgress={getBgProgress(file.id)}
+                removeBackgroundEnabled={file.removeBackground}
+                onToggleRemoveBackground={(enabled) => handleToggleRemoveBackground(file.id, enabled)}
               />
             ))}
           </div>

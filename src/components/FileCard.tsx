@@ -5,9 +5,10 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { ConvertibleFile, getOutputExtension, formatFileSize, QualitySettings, FileType, DEFAULT_QUALITY_SETTINGS } from '@/types/converter';
+import { ConvertibleFile, getOutputExtension, formatFileSize, QualitySettings, FileType, DEFAULT_QUALITY_SETTINGS, OutputFormat } from '@/types/converter';
 import { QualitySettings as QualitySettingsComponent } from './QualitySettings';
 import { CompressionStats } from './CompressionStats';
+import { FormatSelector } from './FormatSelector';
 
 interface FileCardProps {
   file: ConvertibleFile;
@@ -24,9 +25,8 @@ interface FileCardProps {
   showCheckbox?: boolean;
   videoPreviewUrl?: string;
   onReset?: () => void;
-  onRemoveBackground?: () => void;
-  isRemovingBackground?: boolean;
-  backgroundRemovalProgress?: number;
+  removeBackgroundEnabled?: boolean;
+  onToggleRemoveBackground?: (enabled: boolean) => void;
 }
 
 export const FileCard = ({
@@ -44,9 +44,8 @@ export const FileCard = ({
   showCheckbox = false,
   videoPreviewUrl,
   onReset,
-  onRemoveBackground,
-  isRemovingBackground,
-  backgroundRemovalProgress,
+  removeBackgroundEnabled,
+  onToggleRemoveBackground,
 }: FileCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
@@ -239,6 +238,11 @@ export const FileCard = ({
           {file.status === 'pending' && showIndividualActions && (
             <>
               <div className="hidden sm:flex items-center gap-1">
+                <FormatSelector
+                  fileType={file.type}
+                  currentFormat={file.qualitySettings.outputFormat}
+                  onChange={(format: OutputFormat) => onSettingsChange({ ...file.qualitySettings, outputFormat: format })}
+                />
                 <QualitySettingsComponent
                   settings={file.qualitySettings}
                   onChange={onSettingsChange}
@@ -270,20 +274,20 @@ export const FileCard = ({
                     )}
                   </Button>
                 )}
-                {file.type === 'image' && onRemoveBackground && (
+                {file.type === 'image' && onToggleRemoveBackground && (
                   <Button
                     size="icon"
-                    variant="ghost"
-                    onClick={onRemoveBackground}
-                    disabled={isRemovingBackground}
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    title="Hintergrund entfernen"
-                  >
-                    {isRemovingBackground ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Eraser className="h-4 w-4" />
+                    variant={removeBackgroundEnabled ? "secondary" : "ghost"}
+                    onClick={() => onToggleRemoveBackground(!removeBackgroundEnabled)}
+                    className={cn(
+                      "h-8 w-8",
+                      removeBackgroundEnabled 
+                        ? "text-primary bg-primary/10" 
+                        : "text-muted-foreground hover:text-foreground"
                     )}
+                    title={removeBackgroundEnabled ? "Hintergrund entfernen (aktiviert)" : "Hintergrund entfernen"}
+                  >
+                    <Eraser className="h-4 w-4" />
                   </Button>
                 )}
               </div>

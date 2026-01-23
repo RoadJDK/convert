@@ -4,8 +4,8 @@ export type ConversionStatus = 'pending' | 'converting' | 'completed' | 'error';
 
 export type QualityMode = 'percentage' | 'maxSize';
 
-export type ImageOutputFormat = 'webp' | 'jpeg' | 'png';
-export type VideoOutputFormat = 'webm' | 'mp4';
+export type ImageOutputFormat = 'webp' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'avif';
+export type VideoOutputFormat = 'webm' | 'mp4' | 'gif';
 export type OutputFormat = ImageOutputFormat | VideoOutputFormat;
 
 export interface QualitySettings {
@@ -46,6 +46,8 @@ export interface ConvertibleFile {
   // Video-specific
   trimRange?: TrimRange;
   videoDuration?: number;
+  // Image-specific
+  removeBackground?: boolean; // Toggle for background removal during conversion
 }
 
 export const DEFAULT_QUALITY_SETTINGS: QualitySettings = {
@@ -56,22 +58,29 @@ export const DEFAULT_QUALITY_SETTINGS: QualitySettings = {
 };
 
 export const SUPPORTED_IMAGE_FORMATS = [
+  'image/webp',
   'image/png',
   'image/jpeg',
   'image/jpg',
   'image/gif',
   'image/bmp',
   'image/tiff',
-  'image/webp',
+  'image/svg+xml',
+  'image/heic',
+  'image/heif',
 ];
 
 export const SUPPORTED_VIDEO_FORMATS = [
+  'video/webm',
   'video/mp4',
   'video/quicktime',
   'video/x-msvideo',
   'video/x-matroska',
-  'video/webm',
   'video/mpeg',
+  'video/ogg',
+  'video/3gpp',
+  'video/x-flv',
+  'video/x-ms-wmv',
 ];
 
 export const getFileType = (file: File): FileType | null => {
@@ -94,6 +103,9 @@ export const getOutputMimeType = (type: FileType, format?: OutputFormat): string
       webp: 'image/webp',
       jpeg: 'image/jpeg',
       png: 'image/png',
+      gif: 'image/gif',
+      bmp: 'image/bmp',
+      avif: 'image/avif',
       webm: 'video/webm',
       mp4: 'video/mp4',
     };
@@ -106,11 +118,15 @@ export const IMAGE_OUTPUT_FORMATS: { value: ImageOutputFormat; label: string }[]
   { value: 'webp', label: 'WebP' },
   { value: 'jpeg', label: 'JPEG' },
   { value: 'png', label: 'PNG' },
+  { value: 'avif', label: 'AVIF' },
+  { value: 'gif', label: 'GIF' },
+  { value: 'bmp', label: 'BMP' },
 ];
 
 export const VIDEO_OUTPUT_FORMATS: { value: VideoOutputFormat; label: string }[] = [
   { value: 'webm', label: 'WebM' },
   { value: 'mp4', label: 'MP4' },
+  { value: 'gif', label: 'GIF' },
 ];
 
 export const formatFileSize = (bytes: number): string => {

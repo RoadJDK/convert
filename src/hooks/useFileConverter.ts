@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { ConvertibleFile, getFileType, getOutputExtension, QualitySettings, CropArea, TrimRange, DEFAULT_QUALITY_SETTINGS } from '@/types/converter';
+import { ConvertibleFile, getFileType, getOutputExtension, QualitySettings, CropArea, TrimRange, DEFAULT_QUALITY_SETTINGS, ImageOutputFormat } from '@/types/converter';
 import { useImageConverter } from './useImageConverter';
 import { useVideoConverter } from './useVideoConverter';
 import { useStatsTracker } from './useStatsTracker';
+import { removeBackground, Config } from '@imgly/background-removal';
 import { toast } from 'sonner';
 
 // Rate limiting: 30 conversions per minute
@@ -145,8 +146,33 @@ export const useFileConverter = () => {
       updateFile(fileItem.id, { status: 'converting', progress: 0 });
 
       try {
+        let fileToConvert = fileItem.file;
+
+        // Step 1: Background removal if enabled (images only)
+        if (fileItem.type === 'image' && fileItem.removeBackground) {
+          updateFile(fileItem.id, { progress: 5 });
+          
+          const config: Config = {
+            progress: (_key: string, current: number, total: number) => {
+              const bgProgress = Math.round((current / total) * 40); // 0-40% for BG removal
+              updateFile(fileItem.id, { progress: 5 + bgProgress });
+            },
+            output: {
+              format: 'image/png',
+              quality: 1.0
+            }
+          };
+
+          const bgBlob = await removeBackground(fileToConvert, config);
+          fileToConvert = new File([bgBlob], fileItem.file.name, { type: 'image/png' });
+        }
+
         const onProgress = (progress: number) => {
-          updateFile(fileItem.id, { progress });
+          // If BG removal was done, map 0-100 to 45-100
+          const adjustedProgress = fileItem.removeBackground 
+            ? 45 + (progress * 0.55)
+            : progress;
+          updateFile(fileItem.id, { progress: adjustedProgress });
         };
 
         const options = {
@@ -156,10 +182,19 @@ export const useFileConverter = () => {
           trimRange: fileItem.trimRange,
         };
 
+        // For images with background removal to non-transparent format, add white background
+        if (fileItem.type === 'image' && fileItem.removeBackground) {
+          const format = fileItem.qualitySettings.outputFormat as ImageOutputFormat | undefined;
+          if (format === 'jpeg' || format === 'bmp') {
+            // Add white background option - will be handled in image converter
+            (options as any).addWhiteBackground = true;
+          }
+        }
+
         let result: { blob: Blob; url: string };
 
         if (fileItem.type === 'image') {
-          result = await convertImage(fileItem.file, onProgress, options);
+          result = await convertImage(fileToConvert, onProgress, options);
         } else {
           result = await convertToWebM(fileItem.file, onProgress, options);
         }
@@ -175,6 +210,7 @@ export const useFileConverter = () => {
         // Track conversion in stats
         trackConversion(fileItem.type);
       } catch (error) {
+        console.error('Conversion failed:', error);
         updateFile(fileItem.id, {
           status: 'error',
           error: error instanceof Error ? error.message : 'Conversion failed',
@@ -271,6 +307,6 @@ export const useFileConverter = () => {
     updateFileSettings,
     updateFileCrop,
     updateBulkSettings,
-    replaceFileWithNew,
+    updateFile,
   };
 };
