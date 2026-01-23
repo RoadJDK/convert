@@ -57,19 +57,44 @@ export const UserRegistration = ({ onComplete }: UserRegistrationProps) => {
 
     try {
       // Create anonymous session for edge function authentication
-      const { error } = await supabase.auth.signInAnonymously();
+      const { error: authError } = await supabase.auth.signInAnonymously();
       
-      if (error) {
-        console.error("Auth error:", error);
+      if (authError) {
+        console.error("Auth error:", authError);
         toast.error("Registrierung fehlgeschlagen. Bitte erneut versuchen.");
         return;
+      }
+
+      const emailLower = email.trim().toLowerCase();
+
+      // Check if user already exists, if not create new profile
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name')
+        .eq('email', emailLower)
+        .single();
+
+      if (!existingProfile) {
+        // Create new profile in database
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            email: emailLower,
+          });
+
+        if (insertError) {
+          console.error("Profile insert error:", insertError);
+          // Continue anyway - localStorage will still work
+        }
       }
 
       // Store user data in localStorage
       const userData: UserData = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        email: email.trim().toLowerCase(),
+        email: emailLower,
         registeredAt: new Date().toISOString(),
       };
 

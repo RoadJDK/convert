@@ -1,9 +1,11 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useStatsTracker } from './useStatsTracker';
 
 export const useAIRename = () => {
   const [isLoading, setIsLoading] = useState<Record<string, boolean>>({});
+  const { trackAIRename } = useStatsTracker();
 
   const fileToBase64 = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -48,6 +50,11 @@ export const useAIRename = () => {
       if (data?.error) {
         toast.error(data.error);
         return null;
+      }
+
+      // Track AI rename usage
+      if (data?.suggestedName) {
+        trackAIRename();
       }
 
       return data?.suggestedName || null;

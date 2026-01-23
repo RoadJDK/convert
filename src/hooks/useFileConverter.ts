@@ -2,12 +2,14 @@ import { useState, useCallback, useEffect } from 'react';
 import { ConvertibleFile, getFileType, getOutputExtension, QualitySettings, CropArea, TrimRange, DEFAULT_QUALITY_SETTINGS } from '@/types/converter';
 import { useImageConverter } from './useImageConverter';
 import { useVideoConverter } from './useVideoConverter';
+import { useStatsTracker } from './useStatsTracker';
 
 export const useFileConverter = () => {
   const [files, setFiles] = useState<ConvertibleFile[]>([]);
   const [videoPreviews, setVideoPreviews] = useState<Record<string, string>>({});
   const { convertToWebP } = useImageConverter();
   const { convertToWebM, extractFrame } = useVideoConverter();
+  const { trackConversion } = useStatsTracker();
 
   // Extract video previews
   useEffect(() => {
@@ -113,6 +115,9 @@ export const useFileConverter = () => {
           convertedUrl: result.url,
           convertedSize: result.blob.size,
         });
+
+        // Track conversion in stats
+        trackConversion(fileItem.type);
       } catch (error) {
         updateFile(fileItem.id, {
           status: 'error',
@@ -120,7 +125,7 @@ export const useFileConverter = () => {
         });
       }
     },
-    [convertToWebP, convertToWebM, updateFile]
+    [convertToWebP, convertToWebM, updateFile, trackConversion]
   );
 
   const removeFile = useCallback((id: string) => {
