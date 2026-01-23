@@ -153,7 +153,7 @@ export const useFileConverter = () => {
           updateFile(fileItem.id, { progress: 5 });
           
           const config: Config = {
-            publicPath: 'https://unpkg.com/@imgly/background-removal@1.7.0/dist/',
+            publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.5.3/dist/',
             progress: (_key: string, current: number, total: number) => {
               const bgProgress = Math.round((current / total) * 40); // 0-40% for BG removal
               updateFile(fileItem.id, { progress: 5 + bgProgress });
