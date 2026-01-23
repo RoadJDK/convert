@@ -41,7 +41,7 @@ export const BulkSettingsBar = ({
   if (selectedCount === 0) return null;
 
   return (
-    <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-4">
+    <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 sm:p-4 space-y-3 sm:space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-foreground">
@@ -54,7 +54,7 @@ export const BulkSettingsBar = ({
       </div>
 
       {/* KI-Umbenennung Toggle */}
-      <div className="flex items-center justify-between py-2 border-b border-border/50">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-2 border-b border-border/50">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
           <span className="text-sm">KI-Umbenennung</span>
@@ -77,15 +77,15 @@ export const BulkSettingsBar = ({
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              Umbenennen
+              <span className="hidden sm:inline">Umbenennen</span>
             </Button>
           )}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-4">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-4">
         {/* Quality settings */}
-        <Tabs value={mode} onValueChange={(v) => setMode(v as QualityMode)} className="flex-1 min-w-[200px]">
+        <Tabs value={mode} onValueChange={(v) => setMode(v as QualityMode)} className="flex-1 min-w-0 sm:min-w-[200px]">
           <TabsList className="grid w-full grid-cols-2 h-8">
             <TabsTrigger value="percentage" className="text-xs">Prozent</TabsTrigger>
             <TabsTrigger value="maxSize" className="text-xs">Max Größe</TabsTrigger>
@@ -121,7 +121,7 @@ export const BulkSettingsBar = ({
         </Tabs>
 
         {/* Scale/Upscaling */}
-        <div className="min-w-[150px] space-y-2">
+        <div className="min-w-0 sm:min-w-[150px] space-y-2">
           <div className="flex items-center gap-2">
             <Maximize className="h-3 w-3 text-muted-foreground" />
             <Label className="text-xs">Skalierung</Label>
@@ -137,8 +137,8 @@ export const BulkSettingsBar = ({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
-          <Button size="sm" onClick={handleApply}>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button size="sm" onClick={handleApply} className="flex-1 sm:flex-initial">
             Anwenden
           </Button>
         </div>

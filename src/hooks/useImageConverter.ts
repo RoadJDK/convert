@@ -75,7 +75,9 @@ export const useImageConverter = () => {
 
           if (qualitySettings.mode === 'percentage') {
             // Direct quality conversion
-            const quality = qualitySettings.percentage / 100;
+            // IMPORTANT: WebP at 100% uses lossless mode which can be LARGER than the original
+            // Cap at 0.92 for best quality lossy compression (visually identical)
+            const quality = Math.min(qualitySettings.percentage / 100, 0.92);
             canvas.toBlob(
               (blob) => {
                 if (blob) {

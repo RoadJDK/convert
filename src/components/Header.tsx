@@ -1,4 +1,5 @@
 import { RefreshCw } from 'lucide-react';
+import { ThemeToggle } from './ThemeToggle';
 
 export const Header = () => {
   return (
@@ -10,11 +11,12 @@ export const Header = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold text-foreground">maibach-convert</h1>
-            <p className="text-xs text-muted-foreground">Bilder & Videos für das Web</p>
+            <p className="text-xs text-muted-foreground hidden sm:block">Bilder & Videos für das Web</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
           <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
             Kostenlos
           </span>
