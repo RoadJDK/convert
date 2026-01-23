@@ -2,7 +2,6 @@ import { useState, useCallback, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { DropZone } from '@/components/DropZone';
 import { FileCard } from '@/components/FileCard';
-import { RenameToggle } from '@/components/RenameToggle';
 import { Stats } from '@/components/Stats';
 import { BulkSettingsBar } from '@/components/BulkSettingsBar';
 import { CropDialog } from '@/components/CropDialog';
@@ -10,7 +9,7 @@ import { useFileConverter } from '@/hooks/useFileConverter';
 import { useAIRename } from '@/hooks/useAIRename';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Play, Download } from 'lucide-react';
+import { Play, Download, Trash2 } from 'lucide-react';
 import { ConvertibleFile, CropArea, QualitySettings } from '@/types/converter';
 
 const Index = () => {
@@ -24,6 +23,7 @@ const Index = () => {
     updateFileSettings,
     updateFileCrop,
     updateBulkSettings,
+    clearAllFiles,
   } = useFileConverter();
   
   const { generateName, isLoading: aiRenameLoading } = useAIRename();
@@ -55,6 +55,11 @@ const Index = () => {
       .filter((f) => f.status === 'completed')
       .forEach((file) => downloadFile(file));
   }, [files, downloadFile]);
+
+  const handleClearAll = useCallback(() => {
+    clearAllFiles();
+    setSelectedIds([]);
+  }, [clearAllFiles]);
 
   const handleCropApply = useCallback((cropArea: CropArea | undefined, dimensions?: { width: number; height: number }) => {
     if (cropDialogFile) {
@@ -114,13 +119,6 @@ const Index = () => {
           {/* Drop Zone */}
           <DropZone onFilesAdded={handleFilesAdded} />
 
-          {/* Rename Helper Toggle */}
-          <RenameToggle
-            enabled={renameHelperEnabled}
-            onToggle={setRenameHelperEnabled}
-            disabled={false}
-          />
-
           {/* Stats */}
           <Stats files={files} />
 
@@ -149,6 +147,15 @@ const Index = () => {
                     Alle downloaden ({completedCount})
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleClearAll}
+                  className="gap-2 text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Alle löschen
+                </Button>
               </div>
             </div>
           )}
@@ -162,6 +169,7 @@ const Index = () => {
               onAIRenameAll={handleAIRenameSelected}
               isAIRenaming={isAnyAIRenaming}
               renameHelperEnabled={renameHelperEnabled}
+              onToggleRenameHelper={setRenameHelperEnabled}
             />
           )}
 
@@ -193,6 +201,7 @@ const Index = () => {
                 onAIRename={() => handleAIRename(file)}
                 isAIRenaming={aiRenameLoading[file.id]}
                 renameHelperEnabled={renameHelperEnabled}
+                onToggleRenameHelper={setRenameHelperEnabled}
                 selected={selectedIds.includes(file.id)}
                 onSelectChange={(selected) => handleSelectFile(file.id, selected)}
                 showCheckbox={file.status === 'pending'}

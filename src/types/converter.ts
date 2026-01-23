@@ -8,6 +8,7 @@ export interface QualitySettings {
   mode: QualityMode;
   percentage: number; // 1-100
   maxSizeKB: number; // in KB
+  scale: number; // 10-200 (percentage of original size)
 }
 
 export interface CropArea {
@@ -37,8 +38,9 @@ export interface ConvertibleFile {
 
 export const DEFAULT_QUALITY_SETTINGS: QualitySettings = {
   mode: 'percentage',
-  percentage: 85,
+  percentage: 100,
   maxSizeKB: 500,
+  scale: 100,
 };
 
 export const SUPPORTED_IMAGE_FORMATS = [
