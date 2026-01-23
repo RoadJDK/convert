@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import * as SliderPrimitive from '@radix-ui/react-slider';
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
 import { CropArea, ConvertibleFile, TrimRange } from '@/types/converter';
 import { Crop as CropIcon, Play, Pause, Link2, Unlink2, RotateCcw } from 'lucide-react';
 
@@ -87,6 +87,9 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
   const [trimEnd, setTrimEnd] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  // Keep last known slider values so we can detect which thumb moved.
+  const trimSliderPrevRef = useRef<[number, number, number]>([0, 0, 0]);
+
   // Separate aspect ratio inputs
   const [aspectWidth, setAspectWidth] = useState(0);
   const [aspectHeight, setAspectHeight] = useState(0);
@@ -153,6 +156,8 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
       setTrimStart(0);
       setTrimEnd(duration);
       setCurrentTime(0);
+
+      trimSliderPrevRef.current = [0, 0, duration];
       
       const crop = centerAspectCrop(videoWidth, videoHeight, videoWidth / videoHeight);
       setCrop(crop);
@@ -191,48 +196,51 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
     }
   }, []);
 
-  // Handle trim start change
-  const handleTrimStartChange = useCallback((value: number[]) => {
-    const newStart = Math.min(value[0], trimEnd - 0.1);
-    setTrimStart(Math.max(0, newStart));
-    if (videoRef.current) {
-      videoRef.current.pause();
-      setIsPlaying(false);
-      videoRef.current.currentTime = newStart;
-      setCurrentTime(newStart);
-    }
-  }, [trimEnd]);
+  const handleTrimSliderChange = useCallback(
+    (values: number[]) => {
+      if (!Array.isArray(values) || values.length !== 3) return;
 
-  // Handle trim end change
-  const handleTrimEndChange = useCallback((value: number[]) => {
-    const newEnd = Math.max(value[0], trimStart + 0.1);
-    setTrimEnd(Math.min(videoDuration, newEnd));
-    if (videoRef.current) {
-      videoRef.current.pause();
-      setIsPlaying(false);
-      videoRef.current.currentTime = newEnd;
-      setCurrentTime(newEnd);
-    }
-  }, [trimStart, videoDuration]);
+      const prev = trimSliderPrevRef.current;
+      const deltas = values.map((v, i) => Math.abs(v - prev[i]));
+      const maxDelta = Math.max(...deltas);
+      const movedIndex = deltas.indexOf(maxDelta);
 
-  // Handle current position change
-  const handleCurrentTimeChange = useCallback((value: number[]) => {
-    const newTime = Math.max(trimStart, Math.min(trimEnd, value[0]));
-    setCurrentTime(newTime);
-    if (videoRef.current) {
-      videoRef.current.pause();
-      setIsPlaying(false);
-      videoRef.current.currentTime = newTime;
-    }
-  }, [trimStart, trimEnd]);
+      const minGap = 0.1;
+      let start = values[0];
+      let pos = values[1];
+      let end = values[2];
+
+      // Enforce constraints
+      start = Math.max(0, Math.min(start, end - minGap));
+      end = Math.min(videoDuration, Math.max(end, start + minGap));
+      pos = Math.max(start, Math.min(end, pos));
+
+      setTrimStart(start);
+      setTrimEnd(end);
+      setCurrentTime(pos);
+      trimSliderPrevRef.current = [start, pos, end];
+
+      if (videoRef.current) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+        // Jump to start when adjusting start; otherwise keep the current preview position.
+        videoRef.current.currentTime = movedIndex === 0 ? start : pos;
+      }
+    },
+    [videoDuration]
+  );
 
   const togglePlayPause = useCallback(() => {
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
       } else {
-        // Always start playback within trim range
-        if (videoRef.current.currentTime < trimStart || videoRef.current.currentTime > trimEnd) {
+        // Always start playback within trim range.
+        // If we're at (or extremely close to) the end, restart at trimStart to avoid instantly stopping.
+        if (
+          videoRef.current.currentTime < trimStart ||
+          videoRef.current.currentTime >= trimEnd - 0.05
+        ) {
           videoRef.current.currentTime = trimStart;
           setCurrentTime(trimStart);
         }
@@ -393,6 +401,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
     setTrimStart(0);
     setTrimEnd(videoDuration);
     setCurrentTime(0);
+    trimSliderPrevRef.current = [0, 0, videoDuration];
     if (videoRef.current) {
       videoRef.current.currentTime = 0;
     }
@@ -516,64 +525,34 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                   </div>
 
                   {/* Combined slider with 3 thumbs - using z-index to control interaction */}
-                  <div className="relative h-8">
-                    {/* Background track */}
-                    <div className="absolute inset-0 bg-muted rounded-md overflow-hidden pointer-events-none">
-                      {/* Selected region */}
-                      <div 
-                        className="absolute top-0 bottom-0 bg-primary/30"
-                        style={{
-                          left: `${(trimStart / videoDuration) * 100}%`,
-                          width: `${((trimEnd - trimStart) / videoDuration) * 100}%`,
-                        }}
-                      />
-                    </div>
-                    
-                    {/* Interactive layer - one slider with calculated zones */}
-                    {/* We use separate clickable zones for each handle */}
-                    
-                    {/* Start handle zone (left third or up to start position + buffer) */}
-                    <div 
-                      className="absolute top-0 bottom-0 left-0 z-30"
-                      style={{ width: `${Math.max(15, (trimStart / videoDuration) * 100 + 10)}%` }}
-                    >
-                      <Slider
-                        value={[trimStart]}
-                        onValueChange={handleTrimStartChange}
-                        min={0}
-                        max={videoDuration}
-                        step={0.1}
-                        className="h-8 [&_[role=slider]]:bg-green-500 [&_[role=slider]]:border-2 [&_[role=slider]]:border-green-700 [&_[role=slider]]:h-8 [&_[role=slider]]:w-3 [&_[role=slider]]:rounded-sm [&_[role=slider]]:shadow-md [&>.relative]:bg-transparent"
-                      />
-                    </div>
-                    
-                    {/* End handle zone (right portion) */}
-                    <div 
-                      className="absolute top-0 bottom-0 right-0 z-30"
-                      style={{ width: `${Math.max(15, 100 - (trimEnd / videoDuration) * 100 + 10)}%` }}
-                    >
-                      <Slider
-                        value={[trimEnd]}
-                        onValueChange={handleTrimEndChange}
-                        min={0}
-                        max={videoDuration}
-                        step={0.1}
-                        className="h-8 [&_[role=slider]]:bg-red-500 [&_[role=slider]]:border-2 [&_[role=slider]]:border-red-700 [&_[role=slider]]:h-8 [&_[role=slider]]:w-3 [&_[role=slider]]:rounded-sm [&_[role=slider]]:shadow-md [&>.relative]:bg-transparent"
-                      />
-                    </div>
-                    
-                    {/* Current position slider (middle zone, lower z-index) */}
-                    <div className="absolute inset-0 z-20">
-                      <Slider
-                        value={[currentTime]}
-                        onValueChange={handleCurrentTimeChange}
-                        min={0}
-                        max={videoDuration}
-                        step={0.1}
-                        className="h-8 [&_[role=slider]]:bg-primary [&_[role=slider]]:border-2 [&_[role=slider]]:border-primary-foreground [&_[role=slider]]:h-6 [&_[role=slider]]:w-1.5 [&_[role=slider]]:rounded-full [&_[role=slider]]:shadow-lg [&>.relative]:bg-transparent"
-                      />
-                    </div>
-                  </div>
+                  <SliderPrimitive.Root
+                    value={[trimStart, currentTime, trimEnd]}
+                    onValueChange={handleTrimSliderChange}
+                    min={0}
+                    max={videoDuration}
+                    step={0.1}
+                    className="relative flex w-full touch-none select-none items-center"
+                  >
+                    <SliderPrimitive.Track className="relative h-8 w-full grow overflow-hidden rounded-md bg-muted">
+                      <SliderPrimitive.Range className="absolute h-full bg-primary/30" />
+                    </SliderPrimitive.Track>
+
+                    {/* Start */}
+                    <SliderPrimitive.Thumb
+                      className="block h-8 w-3 rounded-sm border-2 border-accent bg-accent shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      aria-label="Start"
+                    />
+                    {/* Position */}
+                    <SliderPrimitive.Thumb
+                      className="block h-6 w-2 rounded-full border-2 border-primary bg-primary shadow-lg ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      aria-label="Position"
+                    />
+                    {/* End */}
+                    <SliderPrimitive.Thumb
+                      className="block h-8 w-3 rounded-sm border-2 border-destructive bg-destructive shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      aria-label="Ende"
+                    />
+                  </SliderPrimitive.Root>
                   
                   {/* Legend */}
                   <div className="flex justify-center gap-4 text-xs">
