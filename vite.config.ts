@@ -18,4 +18,18 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    exclude: ['onnxruntime-web'],
+  },
+  build: {
+    rollupOptions: {
+      // Handle dynamic imports from @imgly/background-removal
+      onwarn(warning, warn) {
+        if (warning.code === 'UNRESOLVED_IMPORT' && warning.exporter?.includes('onnxruntime-web')) {
+          return;
+        }
+        warn(warning);
+      },
+    },
+  },
 }));
