@@ -462,7 +462,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
               )}
             </div>
 
-            {/* Video timeline with 3 separate controls */}
+            {/* Video timeline */}
             {isVideo && videoDuration > 0 && (
               <div className="rounded-lg border bg-card p-3 sm:p-4 space-y-4">
                 <div className="flex items-center justify-between">
@@ -478,99 +478,94 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                   </Button>
                 </div>
 
-                {/* Unified timeline with markers */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={togglePlayPause}
-                      className="h-7 w-7 p-0"
-                      title={isPlaying ? 'Pause' : 'Play'}
-                    >
-                      {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                    </Button>
-                    <span className="text-xs font-mono text-muted-foreground">{formatTime(currentTime)} / {formatTime(videoDuration)}</span>
+                {/* Play button and duration */}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={togglePlayPause}
+                    className="h-7 w-7 p-0"
+                    title={isPlaying ? 'Pause' : 'Play'}
+                  >
+                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  </Button>
+                  <span className="text-xs font-mono text-muted-foreground">
+                    {formatTime(currentTime)} / {formatTime(videoDuration)}
+                  </span>
+                </div>
+
+                {/* Unified timeline - drag handles directly on the visual bar */}
+                <div className="space-y-3">
+                  {/* Time labels */}
+                  <div className="flex justify-between text-xs font-mono text-muted-foreground">
+                    <span className="text-green-600">{formatTime(trimStart)}</span>
+                    <span>{formatTime(currentTime)}</span>
+                    <span className="text-red-600">{formatTime(trimEnd)}</span>
                   </div>
 
-                  {/* Visual timeline representation */}
-                  <div className="relative h-10 bg-muted/50 rounded-md overflow-hidden">
-                    {/* Trimmed region highlight */}
-                    <div 
-                      className="absolute top-0 bottom-0 bg-primary/20"
-                      style={{
-                        left: `${(trimStart / videoDuration) * 100}%`,
-                        width: `${((trimEnd - trimStart) / videoDuration) * 100}%`,
-                      }}
-                    />
+                  {/* Combined slider with 3 thumbs */}
+                  <div className="relative">
+                    {/* Background track */}
+                    <div className="relative h-8 bg-muted rounded-md overflow-hidden">
+                      {/* Selected region */}
+                      <div 
+                        className="absolute top-0 bottom-0 bg-primary/30"
+                        style={{
+                          left: `${(trimStart / videoDuration) * 100}%`,
+                          width: `${((trimEnd - trimStart) / videoDuration) * 100}%`,
+                        }}
+                      />
+                    </div>
                     
-                    {/* Start handle */}
-                    <div 
-                      className="absolute top-0 bottom-0 w-1 bg-green-500 cursor-ew-resize z-10"
-                      style={{ left: `${(trimStart / videoDuration) * 100}%` }}
-                      title={`Start: ${formatTime(trimStart)}`}
-                    />
-                    
-                    {/* End handle */}
-                    <div 
-                      className="absolute top-0 bottom-0 w-1 bg-red-500 cursor-ew-resize z-10"
-                      style={{ left: `${(trimEnd / videoDuration) * 100}%` }}
-                      title={`Ende: ${formatTime(trimEnd)}`}
-                    />
-                    
-                    {/* Current position indicator */}
-                    <div 
-                      className="absolute top-0 bottom-0 w-0.5 bg-primary z-20"
-                      style={{ left: `${(currentTime / videoDuration) * 100}%` }}
-                    />
-                  </div>
-
-                  {/* Three separate sliders for better control */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs text-green-600">Start</Label>
-                        <span className="text-xs font-mono">{formatTime(trimStart)}</span>
-                      </div>
+                    {/* Overlay sliders - absolutely positioned on top */}
+                    {/* Start slider (green) */}
+                    <div className="absolute inset-0">
                       <Slider
                         value={[trimStart]}
                         onValueChange={handleTrimStartChange}
                         min={0}
                         max={videoDuration}
                         step={0.1}
-                        className="w-full [&_[role=slider]]:bg-green-500 [&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
+                        className="h-8 [&_[role=slider]]:bg-green-500 [&_[role=slider]]:border-green-600 [&_[role=slider]]:h-8 [&_[role=slider]]:w-2 [&_[role=slider]]:rounded-sm [&_.bg-primary]:bg-transparent [&_[data-orientation=horizontal]]:bg-transparent"
                       />
                     </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs text-primary">Position</Label>
-                        <span className="text-xs font-mono">{formatTime(currentTime)}</span>
-                      </div>
+                    
+                    {/* Current position slider (primary) */}
+                    <div className="absolute inset-0">
                       <Slider
                         value={[currentTime]}
                         onValueChange={handleCurrentTimeChange}
                         min={0}
                         max={videoDuration}
                         step={0.1}
-                        className="w-full [&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
+                        className="h-8 [&_[role=slider]]:bg-primary [&_[role=slider]]:h-6 [&_[role=slider]]:w-1 [&_[role=slider]]:rounded-full [&_.bg-primary]:bg-transparent [&_[data-orientation=horizontal]]:bg-transparent"
                       />
                     </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs text-red-600">Ende</Label>
-                        <span className="text-xs font-mono">{formatTime(trimEnd)}</span>
-                      </div>
+                    
+                    {/* End slider (red) */}
+                    <div className="absolute inset-0">
                       <Slider
                         value={[trimEnd]}
                         onValueChange={handleTrimEndChange}
                         min={0}
                         max={videoDuration}
                         step={0.1}
-                        className="w-full [&_[role=slider]]:bg-red-500 [&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
+                        className="h-8 [&_[role=slider]]:bg-red-500 [&_[role=slider]]:border-red-600 [&_[role=slider]]:h-8 [&_[role=slider]]:w-2 [&_[role=slider]]:rounded-sm [&_.bg-primary]:bg-transparent [&_[data-orientation=horizontal]]:bg-transparent"
                       />
                     </div>
+                  </div>
+                  
+                  {/* Legend */}
+                  <div className="flex justify-center gap-4 text-xs">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-4 bg-green-500 rounded-sm" /> Start
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-1 h-4 bg-primary rounded-full" /> Position
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-4 bg-red-500 rounded-sm" /> Ende
+                    </span>
                   </div>
                 </div>
 
