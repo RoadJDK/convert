@@ -1,13 +1,15 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { DropZone } from '@/components/DropZone';
 import { FileCard } from '@/components/FileCard';
 import { RenameToggle } from '@/components/RenameToggle';
 import { Stats } from '@/components/Stats';
-import { BulkSettings } from '@/components/BulkSettings';
+import { BulkSettingsBar } from '@/components/BulkSettingsBar';
 import { CropDialog } from '@/components/CropDialog';
 import { useFileConverter } from '@/hooks/useFileConverter';
+import { useAIRename } from '@/hooks/useAIRename';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Play, Download } from 'lucide-react';
 import { ConvertibleFile, CropArea, QualitySettings } from '@/types/converter';
 
@@ -24,13 +26,20 @@ const Index = () => {
     updateBulkSettings,
   } = useFileConverter();
   
+  const { generateName, isLoading: aiRenameLoading } = useAIRename();
   const [renameHelperEnabled, setRenameHelperEnabled] = useState(false);
   const [cropDialogFile, setCropDialogFile] = useState<ConvertibleFile | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const pendingFiles = useMemo(() => files.filter(f => f.status === 'pending'), [files]);
+  const selectedPendingIds = useMemo(() => 
+    selectedIds.filter(id => pendingFiles.some(f => f.id === id)), 
+    [selectedIds, pendingFiles]
+  );
 
   const handleFilesAdded = useCallback(
     (newFiles: File[]) => {
       addFiles(newFiles);
-      // Don't auto-convert anymore, let user adjust settings first
     },
     [addFiles]
   );
@@ -53,12 +62,48 @@ const Index = () => {
     }
   }, [cropDialogFile, updateFileCrop]);
 
-  const handleBulkApply = useCallback((fileIds: string[], updates: Partial<{ qualitySettings: QualitySettings }>) => {
-    updateBulkSettings(fileIds, updates);
-  }, [updateBulkSettings]);
+  const handleBulkApply = useCallback((updates: Partial<{ qualitySettings: QualitySettings }>) => {
+    if (selectedPendingIds.length > 0) {
+      updateBulkSettings(selectedPendingIds, updates);
+    }
+  }, [selectedPendingIds, updateBulkSettings]);
+
+  const handleSelectFile = useCallback((fileId: string, selected: boolean) => {
+    setSelectedIds(prev => 
+      selected ? [...prev, fileId] : prev.filter(id => id !== fileId)
+    );
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedPendingIds.length === pendingFiles.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(pendingFiles.map(f => f.id));
+    }
+  }, [selectedPendingIds.length, pendingFiles]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds([]);
+  }, []);
+
+  const handleAIRename = useCallback(async (file: ConvertibleFile) => {
+    const baseName = file.originalName.replace(/\.[^/.]+$/, '');
+    const newName = await generateName(file.id, baseName, file.type);
+    if (newName) {
+      updateFileName(file.id, newName);
+    }
+  }, [generateName, updateFileName]);
+
+  const handleAIRenameSelected = useCallback(async () => {
+    const filesToRename = pendingFiles.filter(f => selectedPendingIds.includes(f.id));
+    for (const file of filesToRename) {
+      await handleAIRename(file);
+    }
+  }, [pendingFiles, selectedPendingIds, handleAIRename]);
 
   const pendingCount = files.filter((f) => f.status === 'pending').length;
   const completedCount = files.filter((f) => f.status === 'completed').length;
+  const isAnyAIRenaming = Object.values(aiRenameLoading).some(Boolean);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -73,7 +118,7 @@ const Index = () => {
           <RenameToggle
             enabled={renameHelperEnabled}
             onToggle={setRenameHelperEnabled}
-            disabled={true} // Will be enabled when Cloud is connected
+            disabled={false}
           />
 
           {/* Stats */}
@@ -86,7 +131,6 @@ const Index = () => {
                 <p className="text-sm text-muted-foreground">
                   {files.length} Datei{files.length !== 1 ? 'en' : ''} geladen
                 </p>
-                <BulkSettings files={files} onApply={handleBulkApply} />
               </div>
               <div className="flex gap-2">
                 {pendingCount > 0 && (
@@ -109,6 +153,31 @@ const Index = () => {
             </div>
           )}
 
+          {/* Bulk Settings Bar (shown when files selected) */}
+          {pendingFiles.length > 0 && (
+            <BulkSettingsBar
+              selectedCount={selectedPendingIds.length}
+              onApply={handleBulkApply}
+              onClear={handleClearSelection}
+              onAIRenameAll={handleAIRenameSelected}
+              isAIRenaming={isAnyAIRenaming}
+              renameHelperEnabled={renameHelperEnabled}
+            />
+          )}
+
+          {/* Select All (only when there are pending files) */}
+          {pendingFiles.length > 1 && (
+            <div className="flex items-center gap-2 px-1">
+              <Checkbox
+                checked={selectedPendingIds.length === pendingFiles.length && pendingFiles.length > 0}
+                onCheckedChange={handleSelectAll}
+              />
+              <span className="text-sm text-muted-foreground cursor-pointer" onClick={handleSelectAll}>
+                Alle auswählen
+              </span>
+            </div>
+          )}
+
           {/* File List */}
           <div className="space-y-3">
             {files.map((file) => (
@@ -121,7 +190,12 @@ const Index = () => {
                 onRename={(newName) => updateFileName(file.id, newName)}
                 onSettingsChange={(settings) => updateFileSettings(file.id, settings)}
                 onCropClick={() => setCropDialogFile(file)}
+                onAIRename={() => handleAIRename(file)}
+                isAIRenaming={aiRenameLoading[file.id]}
                 renameHelperEnabled={renameHelperEnabled}
+                selected={selectedIds.includes(file.id)}
+                onSelectChange={(selected) => handleSelectFile(file.id, selected)}
+                showCheckbox={file.status === 'pending'}
               />
             ))}
           </div>
