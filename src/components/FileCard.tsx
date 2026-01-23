@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from 'react';
-import { Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop, Sparkles, Image, Film, RotateCcw, Eraser } from 'lucide-react';
+import { Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop, Sparkles, Image, Film, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
@@ -248,6 +248,8 @@ export const FileCard = ({
                   onChange={onSettingsChange}
                   originalSize={file.originalSize}
                   fileType={file.type}
+                  removeBackground={removeBackgroundEnabled}
+                  onRemoveBackgroundChange={onToggleRemoveBackground}
                 />
                 <Button
                   size="sm"
@@ -272,22 +274,6 @@ export const FileCard = ({
                     ) : (
                       <Sparkles className="h-4 w-4" />
                     )}
-                  </Button>
-                )}
-                {file.type === 'image' && onToggleRemoveBackground && (
-                  <Button
-                    size="icon"
-                    variant={removeBackgroundEnabled ? "secondary" : "ghost"}
-                    onClick={() => onToggleRemoveBackground(!removeBackgroundEnabled)}
-                    className={cn(
-                      "h-8 w-8",
-                      removeBackgroundEnabled 
-                        ? "text-primary bg-primary/10" 
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                    title={removeBackgroundEnabled ? "Hintergrund entfernen (aktiviert)" : "Hintergrund entfernen"}
-                  >
-                    <Eraser className="h-4 w-4" />
                   </Button>
                 )}
               </div>
