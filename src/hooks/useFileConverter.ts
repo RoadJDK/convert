@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ConvertibleFile, getFileType, getOutputExtension } from '@/types/converter';
+import { ConvertibleFile, getFileType, getOutputExtension, QualitySettings, CropArea, DEFAULT_QUALITY_SETTINGS } from '@/types/converter';
 import { useImageConverter } from './useImageConverter';
 import { useVideoConverter } from './useVideoConverter';
 
@@ -21,6 +21,8 @@ export const useFileConverter = () => {
           status: 'pending' as const,
           progress: 0,
           originalName: file.name,
+          qualitySettings: { ...DEFAULT_QUALITY_SETTINGS },
+          originalSize: file.size,
         };
       })
       .filter(Boolean) as ConvertibleFile[];
@@ -35,6 +37,29 @@ export const useFileConverter = () => {
     );
   }, []);
 
+  const updateFileSettings = useCallback((id: string, qualitySettings: QualitySettings) => {
+    updateFile(id, { qualitySettings });
+  }, [updateFile]);
+
+  const updateFileCrop = useCallback((id: string, cropArea: CropArea | undefined, dimensions?: { width: number; height: number }) => {
+    const updates: Partial<ConvertibleFile> = { cropArea };
+    if (dimensions) {
+      // Store dimensions in a way that the converter can use
+      (updates as any).dimensions = dimensions;
+    }
+    updateFile(id, updates);
+  }, [updateFile]);
+
+  const updateBulkSettings = useCallback((fileIds: string[], updates: Partial<{ qualitySettings: QualitySettings }>) => {
+    setFiles((prev) =>
+      prev.map((f) => 
+        fileIds.includes(f.id) 
+          ? { ...f, ...updates }
+          : f
+      )
+    );
+  }, []);
+
   const convertFile = useCallback(
     async (fileItem: ConvertibleFile) => {
       updateFile(fileItem.id, { status: 'converting', progress: 0 });
@@ -44,12 +69,18 @@ export const useFileConverter = () => {
           updateFile(fileItem.id, { progress });
         };
 
+        const options = {
+          qualitySettings: fileItem.qualitySettings,
+          cropArea: fileItem.cropArea,
+          dimensions: (fileItem as any).dimensions,
+        };
+
         let result: { blob: Blob; url: string };
 
         if (fileItem.type === 'image') {
-          result = await convertToWebP(fileItem.file, onProgress);
+          result = await convertToWebP(fileItem.file, onProgress, options);
         } else {
-          result = await convertToWebM(fileItem.file, onProgress);
+          result = await convertToWebM(fileItem.file, onProgress, options);
         }
 
         updateFile(fileItem.id, {
@@ -57,6 +88,7 @@ export const useFileConverter = () => {
           progress: 100,
           convertedBlob: result.blob,
           convertedUrl: result.url,
+          convertedSize: result.blob.size,
         });
       } catch (error) {
         updateFile(fileItem.id, {
@@ -104,5 +136,8 @@ export const useFileConverter = () => {
     removeFile,
     downloadFile,
     updateFileName,
+    updateFileSettings,
+    updateFileCrop,
+    updateBulkSettings,
   };
 };

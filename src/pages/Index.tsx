@@ -4,24 +4,35 @@ import { DropZone } from '@/components/DropZone';
 import { FileCard } from '@/components/FileCard';
 import { RenameToggle } from '@/components/RenameToggle';
 import { Stats } from '@/components/Stats';
+import { BulkSettings } from '@/components/BulkSettings';
+import { CropDialog } from '@/components/CropDialog';
 import { useFileConverter } from '@/hooks/useFileConverter';
 import { Button } from '@/components/ui/button';
 import { Play, Download } from 'lucide-react';
+import { ConvertibleFile, CropArea, QualitySettings } from '@/types/converter';
 
 const Index = () => {
-  const { files, addFiles, convertFile, removeFile, downloadFile, updateFileName } = useFileConverter();
+  const { 
+    files, 
+    addFiles, 
+    convertFile, 
+    removeFile, 
+    downloadFile, 
+    updateFileName,
+    updateFileSettings,
+    updateFileCrop,
+    updateBulkSettings,
+  } = useFileConverter();
+  
   const [renameHelperEnabled, setRenameHelperEnabled] = useState(false);
+  const [cropDialogFile, setCropDialogFile] = useState<ConvertibleFile | null>(null);
 
   const handleFilesAdded = useCallback(
     (newFiles: File[]) => {
-      const addedFiles = addFiles(newFiles);
-      
-      // Auto-start conversion for each file
-      addedFiles.forEach((file) => {
-        convertFile(file);
-      });
+      addFiles(newFiles);
+      // Don't auto-convert anymore, let user adjust settings first
     },
-    [addFiles, convertFile]
+    [addFiles]
   );
 
   const handleConvertAll = useCallback(() => {
@@ -35,6 +46,16 @@ const Index = () => {
       .filter((f) => f.status === 'completed')
       .forEach((file) => downloadFile(file));
   }, [files, downloadFile]);
+
+  const handleCropApply = useCallback((cropArea: CropArea | undefined, dimensions?: { width: number; height: number }) => {
+    if (cropDialogFile) {
+      updateFileCrop(cropDialogFile.id, cropArea, dimensions);
+    }
+  }, [cropDialogFile, updateFileCrop]);
+
+  const handleBulkApply = useCallback((fileIds: string[], updates: Partial<{ qualitySettings: QualitySettings }>) => {
+    updateBulkSettings(fileIds, updates);
+  }, [updateBulkSettings]);
 
   const pendingCount = files.filter((f) => f.status === 'pending').length;
   const completedCount = files.filter((f) => f.status === 'completed').length;
@@ -61,9 +82,12 @@ const Index = () => {
           {/* Bulk Actions */}
           {files.length > 0 && (
             <div className="flex items-center justify-between rounded-xl bg-card p-4">
-              <p className="text-sm text-muted-foreground">
-                {files.length} Datei{files.length !== 1 ? 'en' : ''} geladen
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {files.length} Datei{files.length !== 1 ? 'en' : ''} geladen
+                </p>
+                <BulkSettings files={files} onApply={handleBulkApply} />
+              </div>
               <div className="flex gap-2">
                 {pendingCount > 0 && (
                   <Button size="sm" variant="secondary" onClick={handleConvertAll} className="gap-2">
@@ -95,6 +119,8 @@ const Index = () => {
                 onRemove={() => removeFile(file.id)}
                 onDownload={(customName) => downloadFile(file, customName)}
                 onRename={(newName) => updateFileName(file.id, newName)}
+                onSettingsChange={(settings) => updateFileSettings(file.id, settings)}
+                onCropClick={() => setCropDialogFile(file)}
                 renameHelperEnabled={renameHelperEnabled}
               />
             ))}
@@ -110,6 +136,14 @@ const Index = () => {
           )}
         </div>
       </main>
+
+      {/* Crop Dialog */}
+      <CropDialog
+        file={cropDialogFile}
+        open={!!cropDialogFile}
+        onClose={() => setCropDialogFile(null)}
+        onApply={handleCropApply}
+      />
 
       {/* Footer */}
       <footer className="border-t border-border bg-card/50 py-4">
