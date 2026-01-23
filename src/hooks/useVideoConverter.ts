@@ -20,9 +20,9 @@ export const useVideoConverter = () => {
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
 
-    // Use the multi-threaded core build + worker for better stability/performance.
-    // (Loaded via CDN to avoid bundling huge binaries.)
-    const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/umd';
+    // Use single-threaded core for better browser compatibility
+    // Multi-threaded has issues with SharedArrayBuffer in some environments
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
 
     // Helpful while debugging in-browser; harmless in prod.
     ffmpeg.on('log', ({ message }) => {
@@ -30,14 +30,17 @@ export const useVideoConverter = () => {
       console.log('[ffmpeg]', message);
     });
 
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-      workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript'),
-    });
-
-    loadedRef.current = true;
-    return ffmpeg;
+    try {
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      });
+      loadedRef.current = true;
+      return ffmpeg;
+    } catch (loadError) {
+      console.error('FFmpeg load error:', loadError);
+      throw new Error('FFmpeg konnte nicht geladen werden. Bitte Seite neu laden.');
+    }
   }, []);
 
   const convertToWebM = useCallback(
