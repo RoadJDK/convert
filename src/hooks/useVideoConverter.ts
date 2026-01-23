@@ -20,11 +20,20 @@ export const useVideoConverter = () => {
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
 
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    // Use the multi-threaded core build + worker for better stability/performance.
+    // (Loaded via CDN to avoid bundling huge binaries.)
+    const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/umd';
+
+    // Helpful while debugging in-browser; harmless in prod.
+    ffmpeg.on('log', ({ message }) => {
+      // eslint-disable-next-line no-console
+      console.log('[ffmpeg]', message);
+    });
 
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
       wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript'),
     });
 
     loadedRef.current = true;
@@ -56,19 +65,30 @@ export const useVideoConverter = () => {
       const { qualitySettings, cropArea, dimensions, trimRange } = options;
 
       // Build FFmpeg arguments
-      const args: string[] = ['-i', inputName];
+      const args: string[] = [];
 
-      // Trim settings (before filters)
+      // Trim settings: place -ss BEFORE -i for more reliable seeking in wasm.
       if (trimRange) {
-        args.push('-ss', trimRange.start.toString());
-        args.push('-to', trimRange.end.toString());
+        args.push('-ss', Math.max(0, trimRange.start).toString());
+      }
+
+      args.push('-i', inputName);
+
+      // Duration (recommended vs -to in this context)
+      if (trimRange) {
+        const duration = Math.max(0, trimRange.end - trimRange.start);
+        // Avoid 0-length encodes
+        if (duration > 0.05) args.push('-t', duration.toString());
       }
 
       // Build filter complex for crop and scale
       const filters: string[] = [];
 
       if (cropArea) {
-        filters.push(`crop=${cropArea.width}:${cropArea.height}:${cropArea.x}:${cropArea.y}`);
+        // Many encoders require even dimensions.
+        const w = Math.max(2, cropArea.width - (cropArea.width % 2));
+        const h = Math.max(2, cropArea.height - (cropArea.height % 2));
+        filters.push(`crop=${w}:${h}:${cropArea.x}:${cropArea.y}`);
       }
 
       // Apply scale factor
@@ -77,36 +97,48 @@ export const useVideoConverter = () => {
         let targetWidth = dimensions?.width ?? -1;
         let targetHeight = dimensions?.height ?? -1;
         
-        if (scale !== 1 && !dimensions) {
-          // Use scale filter for scaling
-          filters.push(`scale=iw*${scale}:ih*${scale}`);
-        } else if (dimensions) {
-          filters.push(`scale=${targetWidth}:${targetHeight}`);
-        }
+       if (scale !== 1 && !dimensions) {
+         // Keep even dimensions to avoid encoder failures.
+         filters.push(
+           `scale=trunc(iw*${scale}/2)*2:trunc(ih*${scale}/2)*2`
+         );
+       } else if (dimensions) {
+         const w = targetWidth > 0 ? targetWidth - (targetWidth % 2) : -1;
+         const h = targetHeight > 0 ? targetHeight - (targetHeight % 2) : -1;
+         filters.push(`scale=${w}:${h}`);
+       }
       }
 
       if (filters.length > 0) {
         args.push('-vf', filters.join(','));
       }
 
-      // Quality settings - using VP9 codec which is better supported
-      if (qualitySettings.mode === 'percentage') {
-        // Convert displayed percentage to internal quality
-        const internalQuality = displayedToInternalQuality(qualitySettings.percentage);
-        // Map internal quality (50-100) to CRF (40-20)
-        // Higher internal quality = lower CRF = better quality
-        const crf = Math.round(40 - (internalQuality / 100) * 20);
-        args.push('-c:v', 'libvpx-vp9', '-crf', crf.toString(), '-b:v', '0');
-      } else {
-        // Target bitrate based on max size
-        // Estimate: target_bitrate = (target_size_kb * 8) / duration_seconds
-        // Use a rough estimate assuming 30 seconds
-        const targetBitrate = Math.round((qualitySettings.maxSizeKB * 8) / 30);
-        args.push('-c:v', 'libvpx-vp9', '-b:v', `${targetBitrate}k`);
-      }
+      // Quality settings
+      // Prefer VP9, but fall back to VP8 if the build doesn't include libvpx-vp9.
+      const buildVideoCodecArgs = (videoCodec: 'libvpx-vp9' | 'libvpx') => {
+        const codecArgs: string[] = [];
+        if (qualitySettings.mode === 'percentage') {
+          const internalQuality = displayedToInternalQuality(qualitySettings.percentage);
+          // Map internal quality (50-100) to CRF.
+          // VP9: ~40..20, VP8: ~45..20 (slightly different range)
+          const crfMax = videoCodec === 'libvpx' ? 45 : 40;
+          const crf = Math.round(crfMax - (internalQuality / 100) * 20);
+          codecArgs.push('-c:v', videoCodec, '-crf', crf.toString(), '-b:v', '0');
+        } else {
+          const targetBitrate = Math.max(1, Math.round((qualitySettings.maxSizeKB * 8) / 30));
+          codecArgs.push('-c:v', videoCodec, '-b:v', `${targetBitrate}k`);
+        }
+        return codecArgs;
+      };
 
-      // Audio codec
-      args.push('-c:a', 'libopus', '-b:a', '128k');
+      const buildAudioCodecArgs = (audioCodec: 'libopus' | 'libvorbis') => {
+        if (audioCodec === 'libopus') return ['-c:a', 'libopus', '-b:a', '128k'];
+        return ['-c:a', 'libvorbis', '-b:a', '128k'];
+      };
+
+      // Default codecs
+      args.push(...buildVideoCodecArgs('libvpx-vp9'));
+      args.push(...buildAudioCodecArgs('libopus'));
       
       // Output
       args.push(outputName);
@@ -116,8 +148,26 @@ export const useVideoConverter = () => {
       try {
         await ffmpeg.exec(args);
       } catch (execError) {
+        // Retry with more compatible codecs if this build is missing encoders
+        const msg = (execError as any)?.message ?? String(execError);
         console.error('FFmpeg exec error:', execError);
-        throw new Error('Video conversion failed');
+
+        const encoderMissing = /Unknown encoder|not found|cannot find encoder/i.test(msg);
+        if (encoderMissing) {
+          // Rebuild args replacing codecs (keep everything else identical)
+          const retryArgs = args
+            .map((a) => (a === 'libvpx-vp9' ? 'libvpx' : a))
+            .map((a) => (a === 'libopus' ? 'libvorbis' : a));
+          console.warn('Retrying ffmpeg with fallback codecs (VP8/Vorbis).');
+          try {
+            await ffmpeg.exec(retryArgs);
+          } catch (retryError) {
+            const retryMsg = (retryError as any)?.message ?? String(retryError);
+            throw new Error(`Video conversion failed: ${retryMsg}`);
+          }
+        } else {
+          throw new Error(`Video conversion failed: ${msg}`);
+        }
       }
 
       onProgress(95);
@@ -128,8 +178,16 @@ export const useVideoConverter = () => {
       const url = URL.createObjectURL(blob);
 
       // Cleanup
-      await ffmpeg.deleteFile(inputName);
-      await ffmpeg.deleteFile(outputName);
+      try {
+        await ffmpeg.deleteFile(inputName);
+      } catch {
+        // ignore
+      }
+      try {
+        await ffmpeg.deleteFile(outputName);
+      } catch {
+        // ignore
+      }
 
       onProgress(100);
 
