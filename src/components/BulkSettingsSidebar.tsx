@@ -68,17 +68,17 @@ export const BulkSettingsSidebar = ({
               </div>
               <Button 
                 variant="outline" 
-                size="sm" 
+                size="icon"
                 onClick={onAIRenameAll}
                 disabled={isAIRenaming}
-                className="gap-2"
+                className="h-8 w-8"
+                title="KI-Umbenennung"
               >
                 {isAIRenaming ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Sparkles className="h-4 w-4" />
                 )}
-                Umbenennen
               </Button>
             </div>
           )}
