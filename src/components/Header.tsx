@@ -1,6 +1,7 @@
 import { RefreshCw, BarChart3, Shield, Infinity } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { StatsPopup } from './StatsPopup';
+import { Greeting } from './Greeting';
 import { useState } from 'react';
 
 export const Header = () => {
@@ -17,6 +18,10 @@ export const Header = () => {
             <h1 className="text-xl font-bold text-foreground">maibach-convert</h1>
             <p className="text-xs text-muted-foreground hidden sm:block">Bilder & Videos für das Web</p>
           </div>
+        </div>
+
+        <div className="hidden md:flex flex-1 justify-center">
+          <Greeting />
         </div>
 
         <div className="flex items-center gap-2">

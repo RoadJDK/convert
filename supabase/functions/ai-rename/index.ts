@@ -61,9 +61,9 @@ serve(async (req) => {
 
     const { fileName, fileType, imageData } = await req.json();
     
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("CROQ_CLOUD_KEY");
+    if (!GROQ_API_KEY) {
+      throw new Error("CROQ_CLOUD_KEY is not configured");
     }
 
     // Build messages array based on whether we have image data
@@ -86,8 +86,12 @@ Reply ONLY with the new filename, nothing else.`
       }
     ];
 
+    // Groq vision model for image analysis
+    let model = "llama-3.3-70b-versatile"; // Default text model
+    
     if (imageData && fileType === 'image') {
-      // Use vision model with image
+      // Use Groq's vision model with image
+      model = "llama-3.2-90b-vision-preview";
       messages.push({
         role: "user",
         content: [
@@ -111,15 +115,17 @@ Reply ONLY with the new filename, nothing else.`
       });
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model,
         messages,
+        max_tokens: 50,
+        temperature: 0.3,
       }),
     });
 
@@ -137,8 +143,8 @@ Reply ONLY with the new filename, nothing else.`
         });
       }
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error("AI gateway error");
+      console.error("Groq API error:", response.status, errorText);
+      throw new Error("Groq API error");
     }
 
     const data = await response.json();
