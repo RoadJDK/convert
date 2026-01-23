@@ -41,11 +41,13 @@ export const useVideoConverter = () => {
 
       // Determine output format based on settings
       const outputFormat = (options.qualitySettings.outputFormat || 'webm') as VideoOutputFormat;
-      
-      // For Safari, prefer MP4 with H.264 for better compatibility
-      const useSafariCompat = isSafari() && outputFormat === 'webm';
-      const container = useSafariCompat ? 'mp4' : (outputFormat === 'mp4' ? 'mp4' : 'webm');
-      
+
+      if (outputFormat === 'gif') {
+        throw new Error('GIF-Export für Videos wird aktuell nicht unterstützt.');
+      }
+
+      const container = outputFormat === 'mp4' ? 'mp4' : 'webm';
+
       // Select codecs based on container
       const videoCodec = container === 'mp4' ? 'h264' : 'vp8';
       const audioCodec = container === 'mp4' ? 'aac' : 'opus';
@@ -77,7 +79,7 @@ export const useVideoConverter = () => {
               rotate: 0,
             });
             if (canReencode) {
-              return { type: 'reencode', videoCodec, resizeOperation: null, rotate: 0 };
+              return { type: 'reencode', videoCodec, resize: null, rotate: 0 };
             }
             // If we can't re-encode, try to copy the track
             return { type: 'copy' };
@@ -136,7 +138,11 @@ export const useVideoConverter = () => {
     ): Promise<{ blob: Blob; url: string }> => {
       onProgress(5);
 
-      const outputFormat = options.qualitySettings.outputFormat || 'webm';
+      const outputFormat = (options.qualitySettings.outputFormat || 'webm') as VideoOutputFormat;
+
+      if (outputFormat === 'gif') {
+        throw new Error('GIF-Export für Videos wird aktuell nicht unterstützt.');
+      }
 
       return new Promise((resolve, reject) => {
         const video = document.createElement('video');
@@ -147,9 +153,31 @@ export const useVideoConverter = () => {
         video.src = fileUrl;
 
         video.onloadedmetadata = async () => {
+          const { cropArea, dimensions, trimRange } = options;
+
+          const startTime = Math.max(0, trimRange?.start ?? 0);
+          const endTime = Math.max(startTime, trimRange?.end ?? video.duration);
+
+          const sx = cropArea?.x ?? 0;
+          const sy = cropArea?.y ?? 0;
+          const sWidth = cropArea?.width ?? video.videoWidth;
+          const sHeight = cropArea?.height ?? video.videoHeight;
+
+          let targetWidth = cropArea ? cropArea.width : video.videoWidth;
+          let targetHeight = cropArea ? cropArea.height : video.videoHeight;
+
+          if (dimensions) {
+            targetWidth = dimensions.width;
+            targetHeight = dimensions.height;
+          }
+
+          const scale = (options.qualitySettings.scale ?? 100) / 100;
+          targetWidth = Math.max(2, Math.round(targetWidth * scale));
+          targetHeight = Math.max(2, Math.round(targetHeight * scale));
+
           const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
           const ctx = canvas.getContext('2d');
 
           if (!ctx) {
@@ -197,7 +225,7 @@ export const useVideoConverter = () => {
             const source = audioCtx.createMediaElementSource(video);
             const dest = audioCtx.createMediaStreamDestination();
             source.connect(dest);
-            source.connect(audioCtx.destination);
+            // Do NOT connect to destination to avoid audible playback.
             
             dest.stream.getAudioTracks().forEach(track => {
               stream.addTrack(track);
@@ -217,23 +245,42 @@ export const useVideoConverter = () => {
           };
 
           recorder.onstop = () => {
-            URL.revokeObjectURL(fileUrl);
-            
-            const blob = new Blob(chunks, { type: mimeType!.split(';')[0] });
-            
-            if (blob.size === 0) {
-              reject(new Error('Video conversion produced empty file'));
-              return;
-            }
-            
-            console.log('[VideoConverter] MediaRecorder complete:', {
-              blobSize: blob.size,
-              blobType: blob.type,
+            (async () => {
+              URL.revokeObjectURL(fileUrl);
+
+              let blob = new Blob(chunks, { type: mimeType!.split(';')[0] });
+
+              if (!blob || blob.size === 0) {
+                reject(new Error('Video conversion produced empty file'));
+                return;
+              }
+
+              // If the browser could not record in the requested container, remux/transcode to match selection.
+              const targetContainer = outputFormat === 'mp4' ? 'mp4' : 'webm';
+              const targetMime = outputFormat === 'mp4' ? 'video/mp4' : 'video/webm';
+
+              if (blob.type !== targetMime) {
+                onProgress(95);
+                const remux = await convertMedia({
+                  src: blob,
+                  container: targetContainer,
+                  videoCodec: targetContainer === 'mp4' ? 'h264' : 'vp8',
+                  audioCodec: targetContainer === 'mp4' ? 'aac' : 'opus',
+                });
+                blob = await remux.save();
+              }
+
+              console.log('[VideoConverter] MediaRecorder complete:', {
+                blobSize: blob.size,
+                blobType: blob.type,
+              });
+
+              const url = URL.createObjectURL(blob);
+              onProgress(100);
+              resolve({ blob, url });
+            })().catch((err) => {
+              reject(err);
             });
-            
-            const url = URL.createObjectURL(blob);
-            onProgress(100);
-            resolve({ blob, url });
           };
 
           recorder.onerror = (event) => {
@@ -242,29 +289,53 @@ export const useVideoConverter = () => {
             reject(new Error('MediaRecorder error'));
           };
 
-          // Start playback and recording
-          video.currentTime = 0;
-          await video.play();
-          
-          // Request data frequently for better reliability
-          recorder.start(100); // Request data every 100ms
-          onProgress(20);
+          const startRecording = async () => {
+            // Request data frequently for better reliability
+            recorder.start(100); // Request data every 100ms
+            onProgress(20);
 
-          const drawFrame = () => {
-            if (video.ended || video.paused) {
-              recorder.stop();
-              return;
-            }
-            ctx.drawImage(video, 0, 0);
-            onProgress(20 + (video.currentTime / video.duration) * 75);
-            requestAnimationFrame(drawFrame);
+            await video.play();
+
+            const total = Math.max(0.1, endTime - startTime);
+
+            const drawFrame = () => {
+              if (video.ended || video.paused) {
+                recorder.stop();
+                return;
+              }
+
+              // Stop at trim end
+              if (video.currentTime >= endTime - 0.01) {
+                video.pause();
+                recorder.stop();
+                return;
+              }
+
+              ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
+              const rel = Math.max(0, Math.min(1, (video.currentTime - startTime) / total));
+              onProgress(20 + rel * 75);
+              requestAnimationFrame(drawFrame);
+            };
+
+            drawFrame();
+
+            video.onended = () => {
+              setTimeout(() => recorder.stop(), 100); // Small delay to ensure last frame
+            };
           };
 
-          drawFrame();
-
-          video.onended = () => {
-            setTimeout(() => recorder.stop(), 100); // Small delay to ensure last frame
-          };
+          // Seek to trim start before starting recording
+          const safeStart = Math.min(Math.max(0, startTime), Math.max(0, video.duration - 0.05));
+          if (safeStart > 0) {
+            video.currentTime = safeStart;
+            video.onseeked = () => {
+              video.onseeked = null;
+              startRecording().catch(reject);
+            };
+          } else {
+            video.currentTime = 0;
+            startRecording().catch(reject);
+          }
         };
 
         video.onerror = () => {
@@ -293,6 +364,14 @@ export const useVideoConverter = () => {
         outputFormat: options.qualitySettings.outputFormat,
       });
 
+      const hasEdits = Boolean(options.cropArea || options.dimensions || options.trimRange);
+
+      // If there are crop/trim edits, prefer the MediaRecorder pipeline because it can apply them reliably.
+      if (hasEdits) {
+        console.log('[VideoConverter] Using MediaRecorder (edits detected)');
+        return await convertWithMediaRecorder(file, onProgress, options);
+      }
+
       // Try WebCodecs first (best quality)
       if (isWebCodecsSupported()) {
         try {
@@ -303,7 +382,6 @@ export const useVideoConverter = () => {
         }
       }
 
-      // Fallback to MediaRecorder
       console.log('[VideoConverter] Using MediaRecorder fallback');
       return await convertWithMediaRecorder(file, onProgress, options);
     },
