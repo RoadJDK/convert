@@ -561,19 +561,19 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                       <SliderPrimitive.Range className="absolute h-full bg-primary/30" />
                     </SliderPrimitive.Track>
 
-                    {/* Start */}
+                    {/* Start - higher z-index for priority */}
                     <SliderPrimitive.Thumb
-                      className="block h-8 w-3 rounded-sm border-2 border-accent bg-accent shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="block h-8 w-4 rounded-sm border-2 border-accent bg-accent shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 z-20 cursor-ew-resize"
                       aria-label="Start"
                     />
-                    {/* Position */}
+                    {/* Position - lower z-index so Start/End get priority */}
                     <SliderPrimitive.Thumb
-                      className="block h-6 w-2 rounded-full border-2 border-primary bg-primary shadow-lg ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="block h-5 w-1.5 rounded-full border-2 border-primary bg-primary shadow-lg ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 z-10 cursor-ew-resize"
                       aria-label="Position"
                     />
-                    {/* End */}
+                    {/* End - higher z-index for priority */}
                     <SliderPrimitive.Thumb
-                      className="block h-8 w-3 rounded-sm border-2 border-destructive bg-destructive shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="block h-8 w-4 rounded-sm border-2 border-destructive bg-destructive shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 z-20 cursor-ew-resize"
                       aria-label="Ende"
                     />
                   </SliderPrimitive.Root>

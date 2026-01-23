@@ -20,8 +20,8 @@ export const useVideoConverter = () => {
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
 
-    // Use the official CDN UMD build - most stable for browsers
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    // Use the official ffmpegwasm CDN build (most stable per official docs)
+    const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
 
     ffmpeg.on('log', ({ message }) => {
       // eslint-disable-next-line no-console
