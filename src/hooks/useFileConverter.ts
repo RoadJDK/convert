@@ -80,6 +80,33 @@ export const useFileConverter = () => {
     );
   }, []);
 
+  // Replace a file with a new file (e.g., after background removal)
+  const replaceFileWithNew = useCallback((id: string, newFile: File) => {
+    setFiles((prev) =>
+      prev.map((f) => {
+        if (f.id === id) {
+          // Revoke old URL if exists
+          if (f.convertedUrl) {
+            URL.revokeObjectURL(f.convertedUrl);
+          }
+          return {
+            ...f,
+            file: newFile,
+            originalName: newFile.name,
+            originalSize: newFile.size,
+            status: 'pending' as const,
+            progress: 0,
+            convertedBlob: undefined,
+            convertedUrl: undefined,
+            convertedSize: undefined,
+            error: undefined,
+          };
+        }
+        return f;
+      })
+    );
+  }, []);
+
   const updateFileSettings = useCallback((id: string, qualitySettings: QualitySettings) => {
     updateFile(id, { qualitySettings });
   }, [updateFile]);
@@ -244,5 +271,6 @@ export const useFileConverter = () => {
     updateFileSettings,
     updateFileCrop,
     updateBulkSettings,
+    replaceFileWithNew,
   };
 };

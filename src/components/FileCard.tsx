@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from 'react';
-import { Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop, Sparkles, Image, Film, RotateCcw } from 'lucide-react';
+import { Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop, Sparkles, Image, Film, RotateCcw, Eraser } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,9 @@ interface FileCardProps {
   showCheckbox?: boolean;
   videoPreviewUrl?: string;
   onReset?: () => void;
+  onRemoveBackground?: () => void;
+  isRemovingBackground?: boolean;
+  backgroundRemovalProgress?: number;
 }
 
 export const FileCard = ({
@@ -41,6 +44,9 @@ export const FileCard = ({
   showCheckbox = false,
   videoPreviewUrl,
   onReset,
+  onRemoveBackground,
+  isRemovingBackground,
+  backgroundRemovalProgress,
 }: FileCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
@@ -250,11 +256,11 @@ export const FileCard = ({
                 </Button>
                 {onAIRename && (
                   <Button
-                    size="sm"
-                    variant="outline"
+                    size="icon"
+                    variant="ghost"
                     onClick={onAIRename}
                     disabled={isAIRenaming}
-                    className="h-8 gap-1.5 px-2.5"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
                     title="KI-Umbenennung"
                   >
                     {isAIRenaming ? (
@@ -262,7 +268,22 @@ export const FileCard = ({
                     ) : (
                       <Sparkles className="h-4 w-4" />
                     )}
-                    <span className="text-xs">Umbenennen</span>
+                  </Button>
+                )}
+                {file.type === 'image' && onRemoveBackground && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={onRemoveBackground}
+                    disabled={isRemovingBackground}
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    title="Hintergrund entfernen"
+                  >
+                    {isRemovingBackground ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Eraser className="h-4 w-4" />
+                    )}
                   </Button>
                 )}
               </div>
