@@ -11,11 +11,12 @@ import { useAIRename } from '@/hooks/useAIRename';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Play, Trash2 } from 'lucide-react';
-import { ConvertibleFile, CropArea, QualitySettings } from '@/types/converter';
+import { ConvertibleFile, CropArea, QualitySettings, TrimRange } from '@/types/converter';
 
 const Index = () => {
   const { 
     files, 
+    videoPreviews,
     addFiles, 
     convertFile, 
     removeFile, 
@@ -62,9 +63,13 @@ const Index = () => {
     setSelectedIds([]);
   }, [clearAllFiles]);
 
-  const handleCropApply = useCallback((cropArea: CropArea | undefined, dimensions?: { width: number; height: number }) => {
+  const handleCropApply = useCallback((
+    cropArea: CropArea | undefined, 
+    dimensions?: { width: number; height: number },
+    trimRange?: TrimRange
+  ) => {
     if (cropDialogFile) {
-      updateFileCrop(cropDialogFile.id, cropArea, dimensions);
+      updateFileCrop(cropDialogFile.id, cropArea, dimensions, trimRange);
     }
   }, [cropDialogFile, updateFileCrop]);
 
@@ -94,7 +99,7 @@ const Index = () => {
 
   const handleAIRename = useCallback(async (file: ConvertibleFile) => {
     const baseName = file.originalName.replace(/\.[^/.]+$/, '');
-    const newName = await generateName(file.id, baseName, file.type);
+    const newName = await generateName(file.id, baseName, file.type, file.file);
     if (newName) {
       updateFileName(file.id, newName);
     }
@@ -188,7 +193,7 @@ const Index = () => {
 
           {/* File List */}
           <div className="space-y-3">
-            {files.map((file) => (
+          {files.map((file) => (
               <FileCard
                 key={file.id}
                 file={file}
@@ -205,6 +210,7 @@ const Index = () => {
                 selected={selectedIds.includes(file.id)}
                 onSelectChange={(selected) => handleSelectFile(file.id, selected)}
                 showCheckbox={file.status === 'pending'}
+                videoPreviewUrl={videoPreviews[file.id]}
               />
             ))}
           </div>

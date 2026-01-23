@@ -28,7 +28,7 @@ export const BulkSettingsBar = ({
   onToggleRenameHelper,
 }: BulkSettingsBarProps) => {
   const [mode, setMode] = useState<QualityMode>('percentage');
-  const [percentage, setPercentage] = useState(100);
+  const [percentage, setPercentage] = useState(100); // Displayed as 100%, maps to 50% internal
   const [maxSizeKB, setMaxSizeKB] = useState(500);
   const [scale, setScale] = useState(100);
 
@@ -99,10 +99,13 @@ export const BulkSettingsBar = ({
             <Slider
               value={[percentage]}
               onValueChange={(v) => setPercentage(v[0])}
-              min={10}
-              max={100}
-              step={5}
+              min={50}
+              max={200}
+              step={10}
             />
+            <p className="text-xs text-muted-foreground">
+              100% = Standard • 200% = Maximum
+            </p>
           </TabsContent>
 
           <TabsContent value="maxSize" className="mt-2">
