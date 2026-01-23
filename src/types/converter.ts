@@ -5,7 +5,7 @@ export type ConversionStatus = 'pending' | 'converting' | 'completed' | 'error';
 export type QualityMode = 'percentage' | 'maxSize';
 
 export type ImageOutputFormat = 'webp' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'avif';
-export type VideoOutputFormat = 'webm' | 'mp4' | 'gif';
+export type VideoOutputFormat = 'webm' | 'mp4' | 'gif' | 'mov' | 'avi' | 'mkv';
 export type OutputFormat = ImageOutputFormat | VideoOutputFormat;
 
 export interface QualitySettings {
@@ -108,6 +108,9 @@ export const getOutputMimeType = (type: FileType, format?: OutputFormat): string
       avif: 'image/avif',
       webm: 'video/webm',
       mp4: 'video/mp4',
+      mov: 'video/quicktime',
+      avi: 'video/x-msvideo',
+      mkv: 'video/x-matroska',
     };
     return mimeMap[format];
   }
@@ -126,6 +129,9 @@ export const IMAGE_OUTPUT_FORMATS: { value: ImageOutputFormat; label: string }[]
 export const VIDEO_OUTPUT_FORMATS: { value: VideoOutputFormat; label: string }[] = [
   { value: 'webm', label: 'WebM' },
   { value: 'mp4', label: 'MP4' },
+  { value: 'mov', label: 'MOV' },
+  { value: 'mkv', label: 'MKV' },
+  { value: 'avi', label: 'AVI' },
   { value: 'gif', label: 'GIF' },
 ];
 
