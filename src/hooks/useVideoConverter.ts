@@ -20,7 +20,9 @@ export const useVideoConverter = () => {
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
 
-    // Use the official ffmpegwasm CDN build (most stable per official docs)
+    // FFmpeg.wasm core loading:
+    // Safari/WebKit tends to fail when the core is loaded via Blob URLs ("failed to import ffmpeg-core.js").
+    // So we try a direct URL first, and only fall back to toBlobURL if needed.
     const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
 
     ffmpeg.on('log', ({ message }) => {
@@ -29,18 +31,27 @@ export const useVideoConverter = () => {
     });
 
     try {
-      // Load core and wasm only (no worker for single-threaded mode)
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-      });
+      // Attempt 1: direct URLs (no Blob import)
+      try {
+        await ffmpeg.load({
+          coreURL: `${baseURL}/ffmpeg-core.js`,
+          wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+        });
+      } catch (directError) {
+        // Attempt 2: Blob URLs (CORS workaround for some environments)
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        });
+      }
+
       loadedRef.current = true;
       return ffmpeg;
     } catch (loadError) {
       console.error('FFmpeg load error:', loadError);
       loadedRef.current = false;
       ffmpegRef.current = null;
-      throw new Error('Video-Konvertierung nicht verfügbar. Bitte Seite neu laden.');
+      throw new Error('Video-Konvertierung nicht verfügbar (FFmpeg konnte nicht geladen werden).');
     }
   }, []);
 
