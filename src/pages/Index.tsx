@@ -5,11 +5,12 @@ import { FileCard } from '@/components/FileCard';
 import { Stats } from '@/components/Stats';
 import { BulkSettingsBar } from '@/components/BulkSettingsBar';
 import { CropDialog } from '@/components/CropDialog';
+import { DownloadDropdown } from '@/components/DownloadDropdown';
 import { useFileConverter } from '@/hooks/useFileConverter';
 import { useAIRename } from '@/hooks/useAIRename';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Play, Download, Trash2 } from 'lucide-react';
+import { Play, Trash2 } from 'lucide-react';
 import { ConvertibleFile, CropArea, QualitySettings } from '@/types/converter';
 
 const Index = () => {
@@ -114,8 +115,8 @@ const Index = () => {
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
 
-      <main className="container mx-auto flex-1 px-4 py-8">
-        <div className="mx-auto max-w-3xl space-y-6">
+      <main className="container mx-auto flex-1 px-4 py-6 sm:py-8">
+        <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6">
           {/* Drop Zone */}
           <DropZone onFilesAdded={handleFilesAdded} />
 
@@ -124,37 +125,36 @@ const Index = () => {
 
           {/* Bulk Actions */}
           {files.length > 0 && (
-            <div className="flex items-center justify-between rounded-xl bg-card p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl bg-card p-4">
               <div className="flex items-center gap-3">
                 <p className="text-sm text-muted-foreground">
                   {files.length} Datei{files.length !== 1 ? 'en' : ''} geladen
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                 {pendingCount > 0 && (
-                  <Button size="sm" variant="secondary" onClick={handleConvertAll} className="gap-2">
+                  <Button size="sm" variant="secondary" onClick={handleConvertAll} className="gap-2 flex-1 sm:flex-initial">
                     <Play className="h-4 w-4" />
-                    Alle starten ({pendingCount})
+                    <span className="hidden sm:inline">Alle starten</span>
+                    <span className="sm:hidden">Starten</span>
+                    ({pendingCount})
                   </Button>
                 )}
                 {completedCount > 0 && (
-                  <Button 
-                    size="sm" 
-                    onClick={handleDownloadAll} 
-                    className="gap-2 bg-success text-success-foreground hover:bg-success/90"
-                  >
-                    <Download className="h-4 w-4" />
-                    Alle downloaden ({completedCount})
-                  </Button>
+                  <DownloadDropdown 
+                    files={files}
+                    onDownloadIndividual={handleDownloadAll}
+                  />
                 )}
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={handleClearAll}
-                  className="gap-2 text-destructive hover:text-destructive"
+                  className="gap-2 text-destructive hover:text-destructive flex-1 sm:flex-initial"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Alle löschen
+                  <span className="hidden sm:inline">Alle löschen</span>
+                  <span className="sm:hidden">Löschen</span>
                 </Button>
               </div>
             </div>
@@ -211,7 +211,7 @@ const Index = () => {
 
           {/* Empty State */}
           {files.length === 0 && (
-            <div className="rounded-xl border border-dashed border-border bg-card/30 p-12 text-center">
+            <div className="rounded-xl border border-dashed border-border bg-card/30 p-8 sm:p-12 text-center">
               <p className="text-muted-foreground">
                 Lade Bilder oder Videos hoch um zu starten
               </p>

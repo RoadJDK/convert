@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { ConvertibleFile, getOutputExtension, formatFileSize, QualitySettings } from '@/types/converter';
 import { QualitySettings as QualitySettingsComponent } from './QualitySettings';
@@ -38,7 +37,6 @@ export const FileCard = ({
   onAIRename,
   isAIRenaming,
   renameHelperEnabled,
-  onToggleRenameHelper,
   selected = false,
   onSelectChange,
   showCheckbox = false,
@@ -91,11 +89,11 @@ export const FileCard = ({
   const showIndividualActions = !selected;
 
   return (
-    <div className="group rounded-xl bg-card p-4 shadow-soft transition-all duration-200 hover:shadow-lifted">
-      <div className="flex items-start gap-4">
+    <div className="group rounded-xl bg-card p-3 sm:p-4 shadow-soft transition-all duration-200 hover:shadow-lifted">
+      <div className="flex items-start gap-3 sm:gap-4">
         {/* Checkbox for selection */}
         {showCheckbox && (
-          <div className="flex items-center pt-3">
+          <div className="flex items-center pt-2 sm:pt-3">
             <Checkbox
               checked={selected}
               onCheckedChange={(checked) => onSelectChange?.(checked === true)}
@@ -106,7 +104,7 @@ export const FileCard = ({
         {/* Preview/Icon */}
         <div
           className={cn(
-            'flex h-12 w-12 shrink-0 items-center justify-center rounded-lg overflow-hidden',
+            'flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-lg overflow-hidden',
             file.type === 'image' ? 'bg-primary/20' : 'bg-accent/20'
           )}
         >
@@ -118,7 +116,7 @@ export const FileCard = ({
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-accent">
-              <Play className="h-6 w-6" />
+              <Play className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
           )}
         </div>
@@ -140,7 +138,7 @@ export const FileCard = ({
               </div>
             ) : (
               <>
-                <p className="truncate font-medium text-foreground" title={getDisplayName()}>
+                <p className="truncate text-sm sm:text-base font-medium text-foreground" title={getDisplayName()}>
                   {getDisplayName()}
                 </p>
                 {file.status === 'completed' && (
@@ -155,13 +153,14 @@ export const FileCard = ({
             )}
           </div>
 
-          <p className="mt-1 text-xs text-muted-foreground">
-            {file.originalName} • {formatFileSize(file.file.size)}
+          <p className="mt-1 text-xs text-muted-foreground truncate">
+            <span className="hidden sm:inline">{file.originalName} • </span>
+            {formatFileSize(file.file.size)}
             {file.cropArea && (
               <span className="ml-2 text-primary">• Zugeschnitten</span>
             )}
             {file.qualitySettings.scale !== 100 && (
-              <span className="ml-2 text-accent">• {file.qualitySettings.scale}% Skalierung</span>
+              <span className="ml-2 text-accent">• {file.qualitySettings.scale}%</span>
             )}
           </p>
 
@@ -176,7 +175,7 @@ export const FileCard = ({
 
           {/* Progress Bar during conversion */}
           {file.status === 'converting' && (
-            <div className="mt-3">
+            <div className="mt-2 sm:mt-3">
               <Progress value={file.progress} className="h-2" />
               <p className="mt-1 text-xs text-muted-foreground">
                 Konvertiere... {Math.round(file.progress)}%
@@ -197,8 +196,8 @@ export const FileCard = ({
           {/* Error */}
           {file.status === 'error' && (
             <div className="mt-2 flex items-center gap-2 text-destructive">
-              <AlertCircle className="h-4 w-4" />
-              <span className="text-xs">{file.error}</span>
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span className="text-xs truncate">{file.error}</span>
             </div>
           )}
 
@@ -213,64 +212,66 @@ export const FileCard = ({
         </div>
 
         {/* Actions */}
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1 flex-wrap justify-end">
           {file.status === 'pending' && showIndividualActions && (
             <>
-              <QualitySettingsComponent
-                settings={file.qualitySettings}
-                onChange={onSettingsChange}
-              />
-              {file.type === 'image' && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={onCropClick}
-                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                  title="Zuschneiden"
-                >
-                  <Crop className="h-4 w-4" />
-                </Button>
-              )}
-              {onAIRename && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={onAIRename}
-                  disabled={isAIRenaming || !renameHelperEnabled}
-                  className={cn(
-                    "h-8 w-8 p-0",
-                    renameHelperEnabled 
-                      ? "text-primary hover:text-primary/80" 
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                  title="KI-Umbenennung"
-                >
-                  {isAIRenaming ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-4 w-4" />
-                  )}
-                </Button>
-              )}
+              <div className="hidden sm:flex items-center gap-1">
+                <QualitySettingsComponent
+                  settings={file.qualitySettings}
+                  onChange={onSettingsChange}
+                />
+                {file.type === 'image' && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={onCropClick}
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                    title="Zuschneiden"
+                  >
+                    <Crop className="h-4 w-4" />
+                  </Button>
+                )}
+                {onAIRename && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={onAIRename}
+                    disabled={isAIRenaming || !renameHelperEnabled}
+                    className={cn(
+                      "h-8 w-8 p-0",
+                      renameHelperEnabled 
+                        ? "text-primary hover:text-primary/80" 
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    title="KI-Umbenennung"
+                  >
+                    {isAIRenaming ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
               <Button
                 size="sm"
                 onClick={onConvert}
-                className="gap-2 ml-2"
+                className="gap-1 sm:gap-2 ml-1 sm:ml-2"
               >
                 <Play className="h-4 w-4" />
-                Start
+                <span className="hidden sm:inline">Start</span>
               </Button>
             </>
           )}
 
           {file.status === 'pending' && !showIndividualActions && (
-            <span className="text-xs text-muted-foreground italic">
-              Gruppenauswahl aktiv
+            <span className="text-xs text-muted-foreground italic hidden sm:inline">
+              Gruppenauswahl
             </span>
           )}
 
           {file.status === 'converting' && (
-            <Button size="sm" disabled variant="secondary">
+            <Button size="sm" disabled variant="secondary" className="h-8 w-8 p-0">
               <Loader2 className="h-4 w-4 animate-spin" />
             </Button>
           )}
@@ -279,10 +280,10 @@ export const FileCard = ({
             <Button
               size="sm"
               onClick={() => onDownload()}
-              className="gap-2 bg-success text-success-foreground hover:bg-success/90"
+              className="gap-1 sm:gap-2 bg-success text-success-foreground hover:bg-success/90"
             >
               <Download className="h-4 w-4" />
-              Download
+              <span className="hidden sm:inline">Download</span>
             </Button>
           )}
 
@@ -296,7 +297,7 @@ export const FileCard = ({
             size="sm"
             variant="ghost"
             onClick={onRemove}
-            className="text-muted-foreground hover:text-destructive"
+            className="text-muted-foreground hover:text-destructive h-8 w-8 p-0"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
