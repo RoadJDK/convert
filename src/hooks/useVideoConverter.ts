@@ -20,9 +20,8 @@ export const useVideoConverter = () => {
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
 
-    // Use the ESM single-threaded core which doesn't require SharedArrayBuffer
-    // This version works without COOP/COEP headers
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+    // Use the official CDN with latest stable version (UMD build for better compatibility)
+    const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
 
     // Helpful while debugging in-browser; harmless in prod.
     ffmpeg.on('log', ({ message }) => {
@@ -31,7 +30,6 @@ export const useVideoConverter = () => {
     });
 
     try {
-      // Load with explicit classWorkerURL to avoid worker issues
       await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
@@ -120,32 +118,19 @@ export const useVideoConverter = () => {
         args.push('-vf', filters.join(','));
       }
 
-      // Quality settings
-      // Prefer VP9, but fall back to VP8 if the build doesn't include libvpx-vp9.
-      const buildVideoCodecArgs = (videoCodec: 'libvpx-vp9' | 'libvpx') => {
-        const codecArgs: string[] = [];
-        if (qualitySettings.mode === 'percentage') {
-          const internalQuality = displayedToInternalQuality(qualitySettings.percentage);
-          // Map internal quality (50-100) to CRF.
-          // VP9: ~40..20, VP8: ~45..20 (slightly different range)
-          const crfMax = videoCodec === 'libvpx' ? 45 : 40;
-          const crf = Math.round(crfMax - (internalQuality / 100) * 20);
-          codecArgs.push('-c:v', videoCodec, '-crf', crf.toString(), '-b:v', '0');
-        } else {
-          const targetBitrate = Math.max(1, Math.round((qualitySettings.maxSizeKB * 8) / 30));
-          codecArgs.push('-c:v', videoCodec, '-b:v', `${targetBitrate}k`);
-        }
-        return codecArgs;
-      };
-
-      const buildAudioCodecArgs = (audioCodec: 'libopus' | 'libvorbis') => {
-        if (audioCodec === 'libopus') return ['-c:a', 'libopus', '-b:a', '128k'];
-        return ['-c:a', 'libvorbis', '-b:a', '128k'];
-      };
-
-      // Default codecs
-      args.push(...buildVideoCodecArgs('libvpx-vp9'));
-      args.push(...buildAudioCodecArgs('libopus'));
+      // Quality settings - use VP8/Vorbis as default (more stable, avoids memory errors with VP9/Opus)
+      if (qualitySettings.mode === 'percentage') {
+        const internalQuality = displayedToInternalQuality(qualitySettings.percentage);
+        // Map internal quality (50-100) to CRF for VP8 (range ~45..20)
+        const crf = Math.round(45 - (internalQuality / 100) * 25);
+        args.push('-c:v', 'libvpx', '-crf', crf.toString(), '-b:v', '1M');
+      } else {
+        const targetBitrate = Math.max(100, Math.round((qualitySettings.maxSizeKB * 8) / 30));
+        args.push('-c:v', 'libvpx', '-b:v', `${targetBitrate}k`);
+      }
+      
+      // Use vorbis audio codec (stable alternative to opus which causes memory errors)
+      args.push('-c:a', 'libvorbis', '-b:a', '128k');
       
       // Output
       args.push(outputName);
@@ -155,26 +140,9 @@ export const useVideoConverter = () => {
       try {
         await ffmpeg.exec(args);
       } catch (execError) {
-        // Retry with more compatible codecs if this build is missing encoders
         const msg = (execError as any)?.message ?? String(execError);
-        console.error('FFmpeg exec error:', execError);
-
-        const encoderMissing = /Unknown encoder|not found|cannot find encoder/i.test(msg);
-        if (encoderMissing) {
-          // Rebuild args replacing codecs (keep everything else identical)
-          const retryArgs = args
-            .map((a) => (a === 'libvpx-vp9' ? 'libvpx' : a))
-            .map((a) => (a === 'libopus' ? 'libvorbis' : a));
-          console.warn('Retrying ffmpeg with fallback codecs (VP8/Vorbis).');
-          try {
-            await ffmpeg.exec(retryArgs);
-          } catch (retryError) {
-            const retryMsg = (retryError as any)?.message ?? String(retryError);
-            throw new Error(`Video conversion failed: ${retryMsg}`);
-          }
-        } else {
-          throw new Error(`Video conversion failed: ${msg}`);
-        }
+        console.error('FFmpeg exec error:', msg);
+        throw new Error(`Video-Konvertierung fehlgeschlagen. Bitte versuche ein anderes Video oder Format.`);
       }
 
       onProgress(95);
