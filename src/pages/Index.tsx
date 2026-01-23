@@ -3,7 +3,7 @@ import { Header } from '@/components/Header';
 import { DropZone } from '@/components/DropZone';
 import { FileCard } from '@/components/FileCard';
 import { Stats } from '@/components/Stats';
-import { BulkSettingsBar } from '@/components/BulkSettingsBar';
+import { BulkSettingsSidebar } from '@/components/BulkSettingsSidebar';
 import { CropDialog } from '@/components/CropDialog';
 import { DownloadDropdown } from '@/components/DownloadDropdown';
 import { SelectAllControls } from '@/components/SelectAllControls';
@@ -19,7 +19,8 @@ const Index = () => {
     videoPreviews,
     addFiles, 
     convertFile, 
-    removeFile, 
+    removeFile,
+    resetFile,
     downloadFile, 
     updateFileName,
     updateFileSettings,
@@ -83,6 +84,7 @@ const Index = () => {
   const handleBulkApply = useCallback((updates: Partial<{ qualitySettings: QualitySettings }>) => {
     if (selectedPendingIds.length > 0) {
       updateBulkSettings(selectedPendingIds, updates);
+      setSelectedIds([]); // Clear selection after applying
     }
   }, [selectedPendingIds, updateBulkSettings]);
 
@@ -191,16 +193,15 @@ const Index = () => {
             </div>
           )}
 
-          {/* Bulk Settings Bar (shown when files selected) */}
-          {pendingFiles.length > 0 && (
-            <BulkSettingsBar
-              selectedCount={selectedPendingIds.length}
-              onApply={handleBulkApply}
-              onClear={handleClearSelection}
-              onAIRenameAll={handleAIRenameSelected}
-              isAIRenaming={isAnyAIRenaming}
-            />
-          )}
+          {/* Bulk Settings Sidebar (slides in from right when files selected) */}
+          <BulkSettingsSidebar
+            open={selectedPendingIds.length > 0}
+            selectedCount={selectedPendingIds.length}
+            onApply={handleBulkApply}
+            onClose={handleClearSelection}
+            onAIRenameAll={handleAIRenameSelected}
+            isAIRenaming={isAnyAIRenaming}
+          />
 
           {/* Select All (only when there are pending files) */}
           {pendingFiles.length > 1 && (
@@ -233,6 +234,7 @@ const Index = () => {
                 onSelectChange={(selected) => handleSelectFile(file.id, selected)}
                 showCheckbox={file.status === 'pending'}
                 videoPreviewUrl={videoPreviews[file.id]}
+                onReset={() => resetFile(file.id)}
               />
             ))}
           </div>

@@ -1,11 +1,11 @@
 import { useCallback, useState, useEffect } from 'react';
-import { Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop, Sparkles, Image, Film } from 'lucide-react';
+import { Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop, Sparkles, Image, Film, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { ConvertibleFile, getOutputExtension, formatFileSize, QualitySettings, FileType } from '@/types/converter';
+import { ConvertibleFile, getOutputExtension, formatFileSize, QualitySettings, FileType, DEFAULT_QUALITY_SETTINGS } from '@/types/converter';
 import { QualitySettings as QualitySettingsComponent } from './QualitySettings';
 import { CompressionStats } from './CompressionStats';
 
@@ -23,6 +23,7 @@ interface FileCardProps {
   onSelectChange?: (selected: boolean) => void;
   showCheckbox?: boolean;
   videoPreviewUrl?: string;
+  onReset?: () => void;
 }
 
 export const FileCard = ({
@@ -39,6 +40,7 @@ export const FileCard = ({
   onSelectChange,
   showCheckbox = false,
   videoPreviewUrl,
+  onReset,
 }: FileCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
@@ -287,14 +289,27 @@ export const FileCard = ({
           )}
 
           {file.status === 'completed' && (
-            <Button
-              size="sm"
-              onClick={() => onDownload()}
-              className="gap-1 sm:gap-2 bg-success text-success-foreground hover:bg-success/90"
-            >
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Download</span>
-            </Button>
+            <div className="flex items-center gap-1">
+              {onReset && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onReset}
+                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                  title="Zurücksetzen und neu konfigurieren"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={() => onDownload()}
+                className="gap-1 sm:gap-2 bg-success text-success-foreground hover:bg-success/90"
+              >
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">Download</span>
+              </Button>
+            </div>
           )}
 
           {file.status === 'error' && (

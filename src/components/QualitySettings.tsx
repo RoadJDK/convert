@@ -26,52 +26,50 @@ interface QualitySettingsProps {
 }
 
 // Estimate file size based on quality percentage and output format
-// Different formats have very different compression characteristics
+// IMPORTANT: This estimates based on RE-ENCODING, not the original format
+// Re-encoding typically produces files close to or LARGER than original when quality is high
 function estimateFileSize(originalSize: number, percentage: number, outputFormat: string, fileType: 'image' | 'video'): number {
-  // Internal quality: 50% displayed = 25% internal, 100% = 50%, 200% = 100%
+  // Internal quality: 100% displayed = 50% internal, 200% = 100%
   const internalQuality = percentage / 2;
   
   // IMAGE FORMATS
   if (fileType === 'image') {
-    // PNG is lossless - size stays similar or can be larger than original JPEG
+    // PNG is lossless - re-encoding keeps similar or larger size
     if (outputFormat === 'png') {
-      // PNG typically 2-5x larger than compressed JPEG
-      return Math.round(originalSize * 1.5);
+      return Math.round(originalSize * 1.1);
     }
     
-    // JPEG compression estimates - typically larger than WebP
+    // For same-format or lossy re-encoding (JPEG, WebP)
+    // Quality 100% displayed (50% internal) = ~0.5 quality = moderate compression
+    // Quality 200% displayed (100% internal, capped at 92%) = ~0.92 quality = minimal compression
+    
+    // JPEG: At high quality, can be LARGER than original due to re-encoding
     if (outputFormat === 'jpeg') {
-      const minRatio = 0.10; // Very low quality
-      const maxRatio = 0.70; // High quality JPEG
-      const qualityNormalized = Math.max(0, (internalQuality - 25) / 75);
-      const compressionRatio = minRatio + (maxRatio - minRatio) * Math.pow(qualityNormalized, 1.3);
-      return Math.round(originalSize * compressionRatio);
+      // Map: 50% displayed (25% internal) = 0.3x, 100% (50%) = 0.8x, 200% (92%) = 1.2x
+      const qualityFactor = internalQuality / 100; // 0.25 to 0.92
+      const ratio = 0.3 + qualityFactor * 1.0; // 0.55 at 100%, 1.2 at max
+      return Math.round(originalSize * ratio);
     }
     
-    // WebP compression estimates - most efficient
-    const minRatio = 0.05; // Very low quality
-    const maxRatio = 0.40; // High quality WebP
-    const qualityNormalized = Math.max(0, (internalQuality - 25) / 75);
-    const compressionRatio = minRatio + (maxRatio - minRatio) * Math.pow(qualityNormalized, 1.5);
-    return Math.round(originalSize * compressionRatio);
+    // WebP: Generally more efficient than JPEG but still can grow at high quality
+    // Map: 50% displayed = 0.2x, 100% = 0.5x, 200% = 0.9x
+    const qualityFactor = internalQuality / 100;
+    const ratio = 0.2 + qualityFactor * 0.7;
+    return Math.round(originalSize * ratio);
   }
   
   // VIDEO FORMATS
-  // MP4 (H.264) is typically more efficient than WebM (VP9) for most content
+  // Video re-encoding is complex and depends heavily on content
   if (outputFormat === 'mp4') {
-    const minRatio = 0.15;
-    const maxRatio = 0.60;
-    const qualityNormalized = Math.max(0, (internalQuality - 25) / 75);
-    const compressionRatio = minRatio + (maxRatio - minRatio) * Math.pow(qualityNormalized, 1.2);
-    return Math.round(originalSize * compressionRatio);
+    const qualityFactor = internalQuality / 100;
+    const ratio = 0.3 + qualityFactor * 0.5;
+    return Math.round(originalSize * ratio);
   }
   
-  // WebM (VP9) - good compression but can be larger than MP4
-  const minRatio = 0.10;
-  const maxRatio = 0.50;
-  const qualityNormalized = Math.max(0, (internalQuality - 25) / 75);
-  const compressionRatio = minRatio + (maxRatio - minRatio) * Math.pow(qualityNormalized, 1.4);
-  return Math.round(originalSize * compressionRatio);
+  // WebM
+  const qualityFactor = internalQuality / 100;
+  const ratio = 0.25 + qualityFactor * 0.55;
+  return Math.round(originalSize * ratio);
 }
 
 export const QualitySettings = ({ settings, onChange, disabled, originalSize, fileType = 'image' }: QualitySettingsProps) => {
