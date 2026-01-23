@@ -450,32 +450,32 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <CropIcon className="h-5 w-5" />
             {isVideo ? 'Video bearbeiten' : 'Bild bearbeiten'}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-[1fr_320px]">
+        <div className="flex-1 min-h-0 grid grid-cols-1 gap-3 md:grid-cols-[1fr_280px] overflow-auto">
           {/* Preview */}
-          <div className="space-y-3">
-            <div className="flex justify-center bg-muted/30 rounded-lg p-3 sm:p-4 max-h-[55vh] overflow-auto">
+          <div className="space-y-2">
+            <div className="flex justify-center bg-muted/30 rounded-lg p-2 max-h-[40vh] overflow-hidden">
               {imgSrc && !isVideo && (
                 <ReactCrop
                   crop={crop}
                   onChange={(_, percentCrop) => setCrop(percentCrop)}
                   onComplete={handleCropComplete}
                   aspect={cropAspect}
-                  className="max-h-[50vh]"
+                  className="max-h-[38vh]"
                 >
                   <img
                     ref={imgRef}
                     src={imgSrc}
                     alt="Vorschau zum Zuschneiden"
                     onLoad={onImageLoad}
-                    className="max-h-[50vh] object-contain"
+                    className="max-h-[38vh] object-contain"
                   />
                 </ReactCrop>
               )}
@@ -485,14 +485,14 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                   onChange={(_, percentCrop) => setCrop(percentCrop)}
                   onComplete={handleCropComplete}
                   aspect={cropAspect}
-                  className="max-h-[50vh]"
+                  className="max-h-[38vh]"
                 >
                   <video
                     ref={videoRef}
                     src={videoSrc}
                     onLoadedMetadata={onVideoLoad}
                     onTimeUpdate={handleVideoTimeUpdate}
-                    className="max-h-[50vh] object-contain"
+                    className="max-h-[38vh] object-contain"
                     muted
                     playsInline
                   />
@@ -502,7 +502,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
 
             {/* Video timeline */}
             {isVideo && videoDuration > 0 && (
-              <div className="rounded-lg border bg-card p-3 sm:p-4 space-y-4">
+              <div className="rounded-lg border bg-card p-2 sm:p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Video schneiden</span>
                   <Button
@@ -533,7 +533,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                 </div>
 
                 {/* Unified timeline - two overlapping sliders for better control */}
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {/* Time labels */}
                   <div className="flex justify-between text-xs font-mono text-muted-foreground">
                     <span className="text-green-600">{formatTime(trimStart)}</span>
@@ -542,7 +542,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                   </div>
 
                   {/* Stacked sliders - Range on top (z-20), Position below (z-10) */}
-                  <div className="relative h-10">
+                  <div className="relative h-8">
                     {/* Position slider (background layer) */}
                     <SliderPrimitive.Root
                       value={[currentTime]}
@@ -552,7 +552,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                       step={0.1}
                       className="absolute inset-0 flex w-full touch-none select-none items-center z-10"
                     >
-                      <SliderPrimitive.Track className="relative h-8 w-full grow overflow-hidden rounded-md bg-muted">
+                      <SliderPrimitive.Track className="relative h-6 w-full grow overflow-hidden rounded-md bg-muted">
                         {/* Highlight the trimmed range */}
                         <div 
                           className="absolute h-full bg-primary/20"
@@ -564,7 +564,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                       </SliderPrimitive.Track>
                       {/* Position thumb - thin line */}
                       <SliderPrimitive.Thumb
-                        className="block h-6 w-1 rounded-full bg-primary shadow-lg ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-ew-resize"
+                        className="block h-5 w-1 rounded-full bg-primary shadow-lg ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-ew-resize"
                         aria-label="Position"
                       />
                     </SliderPrimitive.Root>
@@ -579,17 +579,17 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                       minStepsBetweenThumbs={1}
                       className="absolute inset-0 flex w-full touch-none select-none items-center z-20 pointer-events-none"
                     >
-                      <SliderPrimitive.Track className="relative h-8 w-full grow overflow-hidden rounded-md pointer-events-none">
+                      <SliderPrimitive.Track className="relative h-6 w-full grow overflow-hidden rounded-md pointer-events-none">
                         <SliderPrimitive.Range className="absolute h-full pointer-events-none" />
                       </SliderPrimitive.Track>
                       {/* Start thumb */}
                       <SliderPrimitive.Thumb
-                        className="block h-10 w-4 rounded-sm border-2 border-green-500 bg-green-500 shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-ew-resize pointer-events-auto"
+                        className="block h-8 w-3 rounded-sm border-2 border-green-500 bg-green-500 shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-ew-resize pointer-events-auto"
                         aria-label="Start"
                       />
                       {/* End thumb */}
                       <SliderPrimitive.Thumb
-                        className="block h-10 w-4 rounded-sm border-2 border-red-500 bg-red-500 shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-ew-resize pointer-events-auto"
+                        className="block h-8 w-3 rounded-sm border-2 border-red-500 bg-red-500 shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-ew-resize pointer-events-auto"
                         aria-label="Ende"
                       />
                     </SliderPrimitive.Root>
@@ -605,7 +605,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
           </div>
 
           {/* Controls */}
-          <div className="rounded-lg border bg-card p-3 sm:p-4 space-y-4">
+          <div className="rounded-lg border bg-card p-2 sm:p-3 space-y-3 h-fit">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Zielgröße</span>
               <Button
@@ -707,7 +707,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
           </div>
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="flex-shrink-0 gap-2 pt-2 border-t">
           <Button variant="outline" onClick={onClose}>
             Abbrechen
           </Button>
