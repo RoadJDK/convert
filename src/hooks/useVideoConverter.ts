@@ -146,13 +146,67 @@ export const useVideoConverter = () => {
 
       return new Promise((resolve, reject) => {
         const video = document.createElement('video');
+        video.preload = 'auto';
+        // Keep muted for autoplay reliability; we try to capture audio separately when possible.
         video.muted = true;
         video.playsInline = true;
+
+        // Some browsers (notably WebKit) are more reliable when the video element is in the DOM.
+        video.style.position = 'fixed';
+        video.style.left = '-9999px';
+        video.style.top = '-9999px';
+        video.style.width = '1px';
+        video.style.height = '1px';
+        video.style.opacity = '0';
+        video.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(video);
 
         const fileUrl = URL.createObjectURL(file);
         video.src = fileUrl;
 
-        video.onloadedmetadata = async () => {
+        const cleanup = () => {
+          URL.revokeObjectURL(fileUrl);
+          try {
+            video.pause();
+          } catch {
+            // ignore
+          }
+          if (video.parentNode) video.parentNode.removeChild(video);
+          video.src = '';
+          try {
+            video.load();
+          } catch {
+            // ignore
+          }
+        };
+
+        const chooseMimeType = (): string | null => {
+          // Determine best MIME type for the target format
+          if (outputFormat === 'mp4') {
+            // Safari/iOS needs mp4
+            if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) return 'video/mp4;codecs=avc1';
+            if (MediaRecorder.isTypeSupported('video/mp4')) return 'video/mp4';
+          }
+
+          // Fallback to webm
+          if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) return 'video/webm;codecs=vp8,opus';
+          if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) return 'video/webm;codecs=vp8';
+          if (MediaRecorder.isTypeSupported('video/webm')) return 'video/webm';
+
+          return null;
+        };
+
+        const waitForFrame = async (): Promise<void> => {
+          // Try to ensure the current frame is decodable before we start recording.
+          if ((video as any).requestVideoFrameCallback) {
+            await new Promise<void>((res) => (video as any).requestVideoFrameCallback(() => res()));
+            return;
+          }
+          // Fallback: wait a tick.
+          await new Promise((r) => setTimeout(r, 50));
+        };
+
+        video.onloadeddata = async () => {
           const { cropArea, dimensions, trimRange } = options;
 
           const startTime = Math.max(0, trimRange?.start ?? 0);
@@ -186,31 +240,9 @@ export const useVideoConverter = () => {
             return;
           }
 
-          // Determine best MIME type for the target format
-          let mimeType: string | null = null;
-          
-          if (outputFormat === 'mp4') {
-            // Safari/iOS needs mp4
-            if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
-              mimeType = 'video/mp4;codecs=avc1';
-            } else if (MediaRecorder.isTypeSupported('video/mp4')) {
-              mimeType = 'video/mp4';
-            }
-          }
-          
+          const mimeType = chooseMimeType();
           if (!mimeType) {
-            // Fallback to webm
-            if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-              mimeType = 'video/webm;codecs=vp8,opus';
-            } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) {
-              mimeType = 'video/webm;codecs=vp8';
-            } else if (MediaRecorder.isTypeSupported('video/webm')) {
-              mimeType = 'video/webm';
-            }
-          }
-
-          if (!mimeType) {
-            URL.revokeObjectURL(fileUrl);
+            cleanup();
             reject(new Error('Kein unterstütztes Video-Format gefunden'));
             return;
           }
@@ -219,17 +251,10 @@ export const useVideoConverter = () => {
 
           const stream = canvas.captureStream(30);
           
-          // Try to capture audio from original video
+          // Try to capture audio from original video (best-effort).
           try {
-            const audioCtx = new AudioContext();
-            const source = audioCtx.createMediaElementSource(video);
-            const dest = audioCtx.createMediaStreamDestination();
-            source.connect(dest);
-            // Do NOT connect to destination to avoid audible playback.
-            
-            dest.stream.getAudioTracks().forEach(track => {
-              stream.addTrack(track);
-            });
+            const originalStream = (video as any).captureStream?.();
+            originalStream?.getAudioTracks?.().forEach((track: MediaStreamTrack) => stream.addTrack(track));
           } catch {
             console.log('[VideoConverter] Could not capture audio track');
           }
@@ -246,7 +271,7 @@ export const useVideoConverter = () => {
 
           recorder.onstop = () => {
             (async () => {
-              URL.revokeObjectURL(fileUrl);
+              cleanup();
 
               let blob = new Blob(chunks, { type: mimeType!.split(';')[0] });
 
@@ -284,44 +309,87 @@ export const useVideoConverter = () => {
           };
 
           recorder.onerror = (event) => {
-            URL.revokeObjectURL(fileUrl);
             console.error('[VideoConverter] MediaRecorder error:', event);
+            cleanup();
             reject(new Error('MediaRecorder error'));
           };
 
           const startRecording = async () => {
+            // Draw once before starting the recorder to avoid an initial black frame.
+            try {
+              await waitForFrame();
+              if (video.readyState >= 2) {
+                ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
+              }
+            } catch {
+              // ignore
+            }
+
             // Request data frequently for better reliability
-            recorder.start(100); // Request data every 100ms
+            recorder.start(250); // chunk interval
             onProgress(20);
 
+            // Autoplay should work because the element is muted.
             await video.play();
 
             const total = Math.max(0.1, endTime - startTime);
 
-            const drawFrame = () => {
-              if (video.ended || video.paused) {
-                recorder.stop();
-                return;
+            let stopped = false;
+            let lastTime = -1;
+            let stallSince = performance.now();
+
+            const stopOnce = () => {
+              if (stopped) return;
+              stopped = true;
+              try {
+                video.pause();
+              } catch {
+                // ignore
               }
+              if (recorder.state !== 'inactive') {
+                try {
+                  recorder.stop();
+                } catch {
+                  // ignore
+                }
+              }
+            };
+
+            const tick = () => {
+              if (stopped) return;
 
               // Stop at trim end
-              if (video.currentTime >= endTime - 0.01) {
-                video.pause();
-                recorder.stop();
+              if (video.ended || video.currentTime >= endTime - 0.01) {
+                stopOnce();
                 return;
               }
 
-              ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
+              // If playback stalls (common when the element is not visible/decoding lags), try to resume.
+              if (video.currentTime === lastTime) {
+                if (!video.paused && performance.now() - stallSince > 1200) {
+                  video.play().catch(() => undefined);
+                }
+              } else {
+                lastTime = video.currentTime;
+                stallSince = performance.now();
+              }
+
+              if (video.readyState >= 2) {
+                ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
+              }
+
               const rel = Math.max(0, Math.min(1, (video.currentTime - startTime) / total));
               onProgress(20 + rel * 75);
-              requestAnimationFrame(drawFrame);
+
+              if ((video as any).requestVideoFrameCallback) {
+                (video as any).requestVideoFrameCallback(() => tick());
+              } else {
+                requestAnimationFrame(tick);
+              }
             };
 
-            drawFrame();
-
-            video.onended = () => {
-              setTimeout(() => recorder.stop(), 100); // Small delay to ensure last frame
-            };
+            // Start ticking (prefer frame callbacks when available).
+            tick();
           };
 
           // Seek to trim start before starting recording
@@ -339,7 +407,7 @@ export const useVideoConverter = () => {
         };
 
         video.onerror = () => {
-          URL.revokeObjectURL(fileUrl);
+          cleanup();
           reject(new Error('Failed to load video'));
         };
       });
