@@ -153,7 +153,11 @@ export const useFileConverter = () => {
           updateFile(fileItem.id, { progress: 5 });
           
           const config: Config = {
-            publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.5.3/dist/',
+            // Ensure model + runtime assets resolve correctly.
+            // Default upstream CDN format: https://staticimgly.com/${PACKAGE_NAME}-data/${PACKAGE_VERSION}/dist/
+            publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/',
+            model: 'isnet_fp16',
+            device: 'cpu',
             progress: (_key: string, current: number, total: number) => {
               const bgProgress = Math.round((current / total) * 40); // 0-40% for BG removal
               updateFile(fileItem.id, { progress: 5 + bgProgress });
