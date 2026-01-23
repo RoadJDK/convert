@@ -270,7 +270,7 @@ Reply ONLY with the new filename, nothing else.`
     });
   } catch (error) {
     console.error("ai-rename error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: "Die Datei konnte nicht umbenannt werden. Bitte versuchen Sie es erneut." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
