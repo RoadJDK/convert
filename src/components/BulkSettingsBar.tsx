@@ -30,6 +30,8 @@ export const BulkSettingsBar = ({
     onApply({
       qualitySettings: { mode, percentage, maxSizeKB, scale: 100 },
     });
+    // Clear selection and close after applying
+    onClear();
   };
 
   if (selectedCount === 0) return null;

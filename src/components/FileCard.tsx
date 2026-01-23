@@ -44,7 +44,7 @@ export const FileCard = ({
   const [editName, setEditName] = useState('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  const extension = getOutputExtension(file.type);
+  const extension = getOutputExtension(file.type, file.qualitySettings.outputFormat);
 
   // Generate preview URL for images
   useEffect(() => {
@@ -235,6 +235,7 @@ export const FileCard = ({
                   settings={file.qualitySettings}
                   onChange={onSettingsChange}
                   originalSize={file.originalSize}
+                  fileType={file.type}
                 />
                 <Button
                   size="sm"

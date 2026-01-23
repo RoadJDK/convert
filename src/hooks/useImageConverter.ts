@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { QualitySettings, CropArea, displayedToInternalQuality } from '@/types/converter';
+import { QualitySettings, CropArea, displayedToInternalQuality, getOutputMimeType, ImageOutputFormat } from '@/types/converter';
 
 interface ConversionResult {
   blob: Blob;
@@ -13,7 +13,7 @@ interface ConversionOptions {
 }
 
 export const useImageConverter = () => {
-  const convertToWebP = useCallback(
+  const convertImage = useCallback(
     async (
       file: File,
       onProgress: (progress: number) => void,
@@ -34,6 +34,10 @@ export const useImageConverter = () => {
           onProgress(40);
 
           const { qualitySettings, cropArea, dimensions } = options;
+          
+          // Determine output format and mime type
+          const outputFormat = (qualitySettings.outputFormat as ImageOutputFormat) || 'webp';
+          const mimeType = getOutputMimeType('image', outputFormat);
 
           // Calculate source dimensions (for cropping)
           const sx = cropArea?.x ?? 0;
@@ -78,7 +82,8 @@ export const useImageConverter = () => {
             // 100% displayed = 50% internal = 0.5 quality
             // 200% displayed = 100% internal = capped at 0.92
             const internalQuality = displayedToInternalQuality(qualitySettings.percentage);
-            const quality = Math.min(internalQuality / 100, 0.92);
+            // PNG doesn't support quality, so only apply for jpeg/webp
+            const quality = outputFormat === 'png' ? undefined : Math.min(internalQuality / 100, 0.92);
             
             canvas.toBlob(
               (blob) => {
@@ -90,7 +95,7 @@ export const useImageConverter = () => {
                   reject(new Error('Failed to convert image'));
                 }
               },
-              'image/webp',
+              mimeType,
               quality
             );
           } else {
@@ -106,13 +111,27 @@ export const useImageConverter = () => {
               return new Promise((res) => {
                 canvas.toBlob(
                   (blob) => res(blob),
-                  'image/webp',
-                  quality
+                  mimeType,
+                  // PNG doesn't support quality
+                  outputFormat === 'png' ? undefined : quality
                 );
               });
             };
 
             onProgress(70);
+
+            // For PNG, just do one conversion since quality doesn't apply
+            if (outputFormat === 'png') {
+              const blob = await tryQuality(1);
+              if (blob) {
+                onProgress(100);
+                const url = URL.createObjectURL(blob);
+                resolve({ blob, url });
+              } else {
+                reject(new Error('Failed to convert image'));
+              }
+              return;
+            }
 
             while (iterations < maxIterations) {
               const midQ = (minQ + maxQ) / 2;
@@ -154,5 +173,8 @@ export const useImageConverter = () => {
     []
   );
 
-  return { convertToWebP };
+  // Backwards compatibility alias
+  const convertToWebP = convertImage;
+
+  return { convertImage, convertToWebP };
 };

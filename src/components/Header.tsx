@@ -16,7 +16,7 @@ export const Header = () => {
             <img src={logoImage} alt="Maibach Convert Logo" className="h-10 w-10 object-cover" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-foreground">maibach-convert</h1>
+            <h1 className="text-xl font-bold text-foreground">Maibach Convert</h1>
             <p className="text-xs text-muted-foreground hidden sm:block">Bilder & Videos für das Web</p>
           </div>
         </div>
