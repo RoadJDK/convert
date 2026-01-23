@@ -31,10 +31,10 @@ export const RenameToggle = ({ enabled, onToggle, disabled }: RenameToggleProps)
           />
         </div>
         <div>
-          <h4 className="font-medium text-foreground">AI Rename Helper</h4>
+          <h4 className="font-medium text-foreground">KI-Umbenennung</h4>
           <p className="text-sm text-muted-foreground">
             {disabled 
-              ? 'Verbinde Cloud für AI-Funktionen'
+              ? 'Aktiviere Cloud für KI-Funktionen'
               : 'Intelligente Dateinamen basierend auf Inhalt'}
           </p>
         </div>

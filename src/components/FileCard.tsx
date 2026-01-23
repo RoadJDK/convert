@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
-import { Image, Video, Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop } from 'lucide-react';
+import { useCallback, useState, useMemo, useEffect } from 'react';
+import { Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { ConvertibleFile, getOutputExtension, formatFileSize, QualitySettings, CropArea } from '@/types/converter';
+import { ConvertibleFile, getOutputExtension, formatFileSize, QualitySettings } from '@/types/converter';
 import { QualitySettings as QualitySettingsComponent } from './QualitySettings';
 import { CompressionStats } from './CompressionStats';
 
@@ -16,7 +17,12 @@ interface FileCardProps {
   onRename: (newName: string) => void;
   onSettingsChange: (settings: QualitySettings) => void;
   onCropClick: () => void;
+  onAIRename?: () => void;
+  isAIRenaming?: boolean;
   renameHelperEnabled: boolean;
+  selected?: boolean;
+  onSelectChange?: (selected: boolean) => void;
+  showCheckbox?: boolean;
 }
 
 export const FileCard = ({
@@ -27,13 +33,27 @@ export const FileCard = ({
   onRename,
   onSettingsChange,
   onCropClick,
+  onAIRename,
+  isAIRenaming,
   renameHelperEnabled,
+  selected = false,
+  onSelectChange,
+  showCheckbox = false,
 }: FileCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  const Icon = file.type === 'image' ? Image : Video;
   const extension = getOutputExtension(file.type);
+
+  // Generate preview URL for images
+  useEffect(() => {
+    if (file.type === 'image') {
+      const url = URL.createObjectURL(file.file);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [file.file, file.type]);
 
   const getDisplayName = () => {
     const baseName = file.suggestedName || file.originalName.replace(/\.[^/.]+$/, '');
@@ -67,19 +87,34 @@ export const FileCard = ({
   return (
     <div className="group rounded-xl bg-card p-4 shadow-soft transition-all duration-200 hover:shadow-lifted">
       <div className="flex items-start gap-4">
-        {/* Icon */}
+        {/* Checkbox for selection */}
+        {showCheckbox && (
+          <div className="flex items-center pt-3">
+            <Checkbox
+              checked={selected}
+              onCheckedChange={(checked) => onSelectChange?.(checked === true)}
+            />
+          </div>
+        )}
+
+        {/* Preview/Icon */}
         <div
           className={cn(
-            'flex h-12 w-12 shrink-0 items-center justify-center rounded-lg',
+            'flex h-12 w-12 shrink-0 items-center justify-center rounded-lg overflow-hidden',
             file.type === 'image' ? 'bg-primary/20' : 'bg-accent/20'
           )}
         >
-          <Icon
-            className={cn(
-              'h-6 w-6',
-              file.type === 'image' ? 'text-primary' : 'text-accent'
-            )}
-          />
+          {previewUrl && file.type === 'image' ? (
+            <img
+              src={previewUrl}
+              alt={file.originalName}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-accent">
+              <Play className="h-6 w-6" />
+            </div>
+          )}
         </div>
 
         {/* Info */}
@@ -162,7 +197,7 @@ export const FileCard = ({
           {renameHelperEnabled && file.suggestedName && file.status === 'completed' && (
             <div className="mt-2 flex items-center gap-2 rounded-md bg-primary/10 px-2 py-1">
               <span className="text-xs text-primary">
-                ✨ AI-Vorschlag angewendet
+                ✨ KI-Vorschlag angewendet
               </span>
             </div>
           )}
@@ -182,8 +217,25 @@ export const FileCard = ({
                   variant="ghost"
                   onClick={onCropClick}
                   className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                  title="Zuschneiden"
                 >
                   <Crop className="h-4 w-4" />
+                </Button>
+              )}
+              {renameHelperEnabled && onAIRename && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onAIRename}
+                  disabled={isAIRenaming}
+                  className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+                  title="KI-Umbenennung"
+                >
+                  {isAIRenaming ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
                 </Button>
               )}
               <Button
@@ -216,7 +268,7 @@ export const FileCard = ({
 
           {file.status === 'error' && (
             <Button size="sm" variant="secondary" onClick={onConvert}>
-              Retry
+              Erneut
             </Button>
           )}
 
