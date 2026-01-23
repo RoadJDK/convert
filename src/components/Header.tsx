@@ -1,8 +1,9 @@
-import { RefreshCw, BarChart3, Shield, Infinity } from 'lucide-react';
+import { BarChart3, Shield, Infinity } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { StatsPopup } from './StatsPopup';
 import { Greeting } from './Greeting';
 import { useState } from 'react';
+import logoImage from '@/assets/logo-original.png';
 
 export const Header = () => {
   const [statsOpen, setStatsOpen] = useState(false);
@@ -11,8 +12,8 @@ export const Header = () => {
     <header className="border-b border-border bg-card/80 backdrop-blur-sm">
       <div className="container mx-auto flex items-center justify-between px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent">
-            <RefreshCw className="h-5 w-5 text-accent-foreground" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl overflow-hidden">
+            <img src={logoImage} alt="Maibach Convert Logo" className="h-10 w-10 object-cover" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-foreground">maibach-convert</h1>

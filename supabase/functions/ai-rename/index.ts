@@ -28,6 +28,43 @@ const RequestSchema = z.object({
   ),
 });
 
+// Rate limiting configuration
+const RATE_LIMIT_RENAMES_PER_MINUTE = 100;
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(userId: string): { allowed: boolean; remaining: number; resetIn: number } {
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute window
+  
+  let userLimit = rateLimitMap.get(userId);
+  
+  // Reset if window expired
+  if (!userLimit || now > userLimit.resetTime) {
+    userLimit = { count: 0, resetTime: now + windowMs };
+    rateLimitMap.set(userId, userLimit);
+  }
+  
+  const remaining = RATE_LIMIT_RENAMES_PER_MINUTE - userLimit.count;
+  const resetIn = Math.ceil((userLimit.resetTime - now) / 1000);
+  
+  if (userLimit.count >= RATE_LIMIT_RENAMES_PER_MINUTE) {
+    return { allowed: false, remaining: 0, resetIn };
+  }
+  
+  userLimit.count++;
+  return { allowed: true, remaining: remaining - 1, resetIn };
+}
+
+// Clean up old rate limit entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of rateLimitMap.entries()) {
+    if (now > value.resetTime) {
+      rateLimitMap.delete(key);
+    }
+  }
+}, 60000); // Clean every minute
+
 serve(async (req) => {
   const origin = req.headers.get("origin");
   const corsHeaders = getCorsHeaders(origin);
@@ -67,6 +104,28 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "Unauthorized - invalid token" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userId = claimsData.claims.sub as string;
+
+    // Check rate limit for AI renames (100/min)
+    const renameLimit = checkRateLimit(`rename:${userId}`);
+    if (!renameLimit.allowed) {
+      return new Response(
+        JSON.stringify({ 
+          error: `Rate limit überschritten. Bitte warte ${renameLimit.resetIn} Sekunden.`,
+          resetIn: renameLimit.resetIn
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(renameLimit.resetIn)
+          } 
+        }
       );
     }
 
@@ -195,7 +254,11 @@ Reply ONLY with the new filename, nothing else.`
       .slice(0, 30);
 
     return new Response(JSON.stringify({ suggestedName }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { 
+        ...corsHeaders, 
+        "Content-Type": "application/json",
+        "X-RateLimit-Remaining": String(renameLimit.remaining),
+      },
     });
   } catch (error) {
     console.error("ai-rename error:", error);
