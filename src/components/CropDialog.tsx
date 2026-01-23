@@ -159,25 +159,37 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
     }
   }, []);
 
+  // Use refs to avoid stale closures in video time update
+  const trimStartRef = useRef(trimStart);
+  const trimEndRef = useRef(trimEnd);
+  
+  useEffect(() => {
+    trimStartRef.current = trimStart;
+    trimEndRef.current = trimEnd;
+  }, [trimStart, trimEnd]);
+
   const handleVideoTimeUpdate = useCallback(() => {
     if (videoRef.current) {
       const t = videoRef.current.currentTime;
-      // Clamp preview to trim range
-      if (trimEnd > 0 && t > trimEnd) {
+      const endTime = trimEndRef.current;
+      const startTime = trimStartRef.current;
+      
+      // Only clamp if we're playing and exceed the end
+      if (endTime > 0 && t >= endTime) {
         videoRef.current.pause();
         setIsPlaying(false);
-        videoRef.current.currentTime = trimEnd;
-        setCurrentTime(trimEnd);
+        videoRef.current.currentTime = endTime;
+        setCurrentTime(endTime);
         return;
       }
-      if (t < trimStart) {
-        videoRef.current.currentTime = trimStart;
-        setCurrentTime(trimStart);
+      if (t < startTime) {
+        videoRef.current.currentTime = startTime;
+        setCurrentTime(startTime);
         return;
       }
       setCurrentTime(t);
     }
-  }, [trimEnd, trimStart]);
+  }, []);
 
   // Handle trim start change
   const handleTrimStartChange = useCallback((value: number[]) => {
@@ -503,10 +515,10 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                     <span className="text-red-600">{formatTime(trimEnd)}</span>
                   </div>
 
-                  {/* Combined slider with 3 thumbs */}
-                  <div className="relative">
+                  {/* Combined slider with 3 thumbs - using z-index to control interaction */}
+                  <div className="relative h-8">
                     {/* Background track */}
-                    <div className="relative h-8 bg-muted rounded-md overflow-hidden">
+                    <div className="absolute inset-0 bg-muted rounded-md overflow-hidden pointer-events-none">
                       {/* Selected region */}
                       <div 
                         className="absolute top-0 bottom-0 bg-primary/30"
@@ -517,40 +529,48 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
                       />
                     </div>
                     
-                    {/* Overlay sliders - absolutely positioned on top */}
-                    {/* Start slider (green) */}
-                    <div className="absolute inset-0">
+                    {/* Interactive layer - one slider with calculated zones */}
+                    {/* We use separate clickable zones for each handle */}
+                    
+                    {/* Start handle zone (left third or up to start position + buffer) */}
+                    <div 
+                      className="absolute top-0 bottom-0 left-0 z-30"
+                      style={{ width: `${Math.max(15, (trimStart / videoDuration) * 100 + 10)}%` }}
+                    >
                       <Slider
                         value={[trimStart]}
                         onValueChange={handleTrimStartChange}
                         min={0}
                         max={videoDuration}
                         step={0.1}
-                        className="h-8 [&_[role=slider]]:bg-green-500 [&_[role=slider]]:border-green-600 [&_[role=slider]]:h-8 [&_[role=slider]]:w-2 [&_[role=slider]]:rounded-sm [&_.bg-primary]:bg-transparent [&_[data-orientation=horizontal]]:bg-transparent"
+                        className="h-8 [&_[role=slider]]:bg-green-500 [&_[role=slider]]:border-2 [&_[role=slider]]:border-green-700 [&_[role=slider]]:h-8 [&_[role=slider]]:w-3 [&_[role=slider]]:rounded-sm [&_[role=slider]]:shadow-md [&>.relative]:bg-transparent"
                       />
                     </div>
                     
-                    {/* Current position slider (primary) */}
-                    <div className="absolute inset-0">
-                      <Slider
-                        value={[currentTime]}
-                        onValueChange={handleCurrentTimeChange}
-                        min={0}
-                        max={videoDuration}
-                        step={0.1}
-                        className="h-8 [&_[role=slider]]:bg-primary [&_[role=slider]]:h-6 [&_[role=slider]]:w-1 [&_[role=slider]]:rounded-full [&_.bg-primary]:bg-transparent [&_[data-orientation=horizontal]]:bg-transparent"
-                      />
-                    </div>
-                    
-                    {/* End slider (red) */}
-                    <div className="absolute inset-0">
+                    {/* End handle zone (right portion) */}
+                    <div 
+                      className="absolute top-0 bottom-0 right-0 z-30"
+                      style={{ width: `${Math.max(15, 100 - (trimEnd / videoDuration) * 100 + 10)}%` }}
+                    >
                       <Slider
                         value={[trimEnd]}
                         onValueChange={handleTrimEndChange}
                         min={0}
                         max={videoDuration}
                         step={0.1}
-                        className="h-8 [&_[role=slider]]:bg-red-500 [&_[role=slider]]:border-red-600 [&_[role=slider]]:h-8 [&_[role=slider]]:w-2 [&_[role=slider]]:rounded-sm [&_.bg-primary]:bg-transparent [&_[data-orientation=horizontal]]:bg-transparent"
+                        className="h-8 [&_[role=slider]]:bg-red-500 [&_[role=slider]]:border-2 [&_[role=slider]]:border-red-700 [&_[role=slider]]:h-8 [&_[role=slider]]:w-3 [&_[role=slider]]:rounded-sm [&_[role=slider]]:shadow-md [&>.relative]:bg-transparent"
+                      />
+                    </div>
+                    
+                    {/* Current position slider (middle zone, lower z-index) */}
+                    <div className="absolute inset-0 z-20">
+                      <Slider
+                        value={[currentTime]}
+                        onValueChange={handleCurrentTimeChange}
+                        min={0}
+                        max={videoDuration}
+                        step={0.1}
+                        className="h-8 [&_[role=slider]]:bg-primary [&_[role=slider]]:border-2 [&_[role=slider]]:border-primary-foreground [&_[role=slider]]:h-6 [&_[role=slider]]:w-1.5 [&_[role=slider]]:rounded-full [&_[role=slider]]:shadow-lg [&>.relative]:bg-transparent"
                       />
                     </div>
                   </div>
