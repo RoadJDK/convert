@@ -78,12 +78,8 @@ export const useImageConverter = () => {
           onProgress(60);
 
           if (qualitySettings.mode === 'percentage') {
-            // Convert displayed percentage to internal quality
-            // 100% displayed = 50% internal = 0.5 quality
-            // 200% displayed = 100% internal = capped at 0.92
-            const internalQuality = displayedToInternalQuality(qualitySettings.percentage);
-            // PNG doesn't support quality, so only apply for jpeg/webp
-            const quality = outputFormat === 'png' ? undefined : Math.min(internalQuality / 100, 0.92);
+            // displayedToInternalQuality now returns 0.4-0.92 directly
+            const quality = outputFormat === 'png' ? undefined : displayedToInternalQuality(qualitySettings.percentage);
             
             canvas.toBlob(
               (blob) => {
