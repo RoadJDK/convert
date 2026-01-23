@@ -1,10 +1,12 @@
 import { useCallback, useState } from 'react';
-import { Image, Video, Download, Trash2, Play, Check, AlertCircle, Loader2, Pencil } from 'lucide-react';
+import { Image, Video, Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { ConvertibleFile, getOutputExtension } from '@/types/converter';
+import { ConvertibleFile, getOutputExtension, formatFileSize, QualitySettings, CropArea } from '@/types/converter';
+import { QualitySettings as QualitySettingsComponent } from './QualitySettings';
+import { CompressionStats } from './CompressionStats';
 
 interface FileCardProps {
   file: ConvertibleFile;
@@ -12,6 +14,8 @@ interface FileCardProps {
   onRemove: () => void;
   onDownload: (customName?: string) => void;
   onRename: (newName: string) => void;
+  onSettingsChange: (settings: QualitySettings) => void;
+  onCropClick: () => void;
   renameHelperEnabled: boolean;
 }
 
@@ -21,6 +25,8 @@ export const FileCard = ({
   onRemove,
   onDownload,
   onRename,
+  onSettingsChange,
+  onCropClick,
   renameHelperEnabled,
 }: FileCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -57,12 +63,6 @@ export const FileCard = ({
     },
     [handleSaveEdit]
   );
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   return (
     <div className="group rounded-xl bg-card p-4 shadow-soft transition-all duration-200 hover:shadow-lifted">
@@ -116,7 +116,19 @@ export const FileCard = ({
 
           <p className="mt-1 text-xs text-muted-foreground">
             {file.originalName} • {formatFileSize(file.file.size)}
+            {file.cropArea && (
+              <span className="ml-2 text-primary">• Zugeschnitten</span>
+            )}
           </p>
+
+          {/* Quality indicator for pending files */}
+          {file.status === 'pending' && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Qualität: {file.qualitySettings.mode === 'percentage' 
+                ? `${file.qualitySettings.percentage}%` 
+                : `max ${file.qualitySettings.maxSizeKB} KB`}
+            </p>
+          )}
 
           {/* Progress */}
           {file.status === 'converting' && (
@@ -125,6 +137,16 @@ export const FileCard = ({
               <p className="mt-1 text-xs text-muted-foreground">
                 Konvertiere... {Math.round(file.progress)}%
               </p>
+            </div>
+          )}
+
+          {/* Compression Stats */}
+          {file.status === 'completed' && file.convertedSize && (
+            <div className="mt-2">
+              <CompressionStats 
+                originalSize={file.originalSize} 
+                convertedSize={file.convertedSize} 
+              />
             </div>
           )}
 
@@ -147,16 +169,32 @@ export const FileCard = ({
         </div>
 
         {/* Actions */}
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1">
           {file.status === 'pending' && (
-            <Button
-              size="sm"
-              onClick={onConvert}
-              className="gap-2"
-            >
-              <Play className="h-4 w-4" />
-              Start
-            </Button>
+            <>
+              <QualitySettingsComponent
+                settings={file.qualitySettings}
+                onChange={onSettingsChange}
+              />
+              {file.type === 'image' && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onCropClick}
+                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                >
+                  <Crop className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={onConvert}
+                className="gap-2 ml-2"
+              >
+                <Play className="h-4 w-4" />
+                Start
+              </Button>
+            </>
           )}
 
           {file.status === 'converting' && (
