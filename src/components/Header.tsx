@@ -9,7 +9,7 @@ export const Header = () => {
             <RefreshCw className="h-5 w-5 text-accent-foreground" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-foreground">WebConvert</h1>
+            <h1 className="text-xl font-bold text-foreground">maibach-convert</h1>
             <p className="text-xs text-muted-foreground">Bilder & Videos für das Web</p>
           </div>
         </div>
