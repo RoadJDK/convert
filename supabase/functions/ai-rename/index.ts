@@ -169,13 +169,21 @@ serve(async (req) => {
 
 Rules:
 - Use only lowercase letters
-- Use hyphens instead of spaces
+- Use hyphens instead of spaces (maximum 2 hyphens total)
 - No special characters except hyphens
 - Do NOT add file extension
-- Maximum 30 characters
+- Maximum 25 characters
+- Use 1 to 3 words ONLY
+- If ONE word perfectly describes the main subject, use just one word (e.g., "tree", "sunset", "cat")
 - The name should be descriptive and in ENGLISH
-- Keep it short and concise (1-3 words ideally)
-- Focus on the main subject of the image
+- Focus on the main subject/object in the image
+
+Examples of good filenames:
+- tree
+- sunset-beach
+- golden-retriever
+- mountain-lake
+- red-car
 
 Reply ONLY with the new filename, nothing else.`
       }
@@ -185,7 +193,7 @@ Reply ONLY with the new filename, nothing else.`
     let model = "llama-3.3-70b-versatile"; // Default text model
     
     if (imageData && fileType === 'image') {
-      // Use Groq's vision model with image - using llama-4-scout for vision capability
+      // Use Groq's vision model with image
       model = "meta-llama/llama-4-scout-17b-16e-instruct";
       messages.push({
         role: "user",
@@ -198,7 +206,7 @@ Reply ONLY with the new filename, nothing else.`
           },
           {
             type: "text",
-            text: `Analyze this image and suggest a short, descriptive filename. Original name: "${sanitizedFileName}"`
+            text: `Analyze this image and suggest a filename (1-3 words, max 2 hyphens). If one word fits perfectly, use just one word.`
           }
         ]
       });
@@ -206,7 +214,7 @@ Reply ONLY with the new filename, nothing else.`
       // Fallback for videos or when no image data
       messages.push({
         role: "user",
-        content: `Original filename: "${sanitizedFileName}" (Type: ${fileType}). Suggest a clean, descriptive filename.`
+        content: `Original filename: "${sanitizedFileName}" (Type: ${fileType}). Suggest a clean filename (1-3 words, max 2 hyphens).`
       });
     }
 
