@@ -124,14 +124,20 @@ export const calculateSizeChange = (original: number, converted: number): { perc
   return { percentage: Math.abs(percentage), isSmaller: converted < original };
 };
 
-// Convert displayed percentage (100-200) to internal quality (50-100)
+// Convert displayed percentage (50-200) to internal quality (0.4-0.92)
+// This maps to actual canvas.toBlob quality parameter
 export const displayedToInternalQuality = (displayed: number): number => {
-  // 100% displayed = 50% internal
-  // 200% displayed = 100% internal
-  return displayed / 2;
+  // 50% displayed = 0.4 (low quality, small file)
+  // 100% displayed = 0.75 (good balance)
+  // 200% displayed = 0.92 (near-lossless, capped to prevent bloat)
+  // Linear interpolation: quality = 0.4 + (displayed - 50) * (0.92 - 0.4) / (200 - 50)
+  const quality = 0.4 + ((displayed - 50) / 150) * 0.52;
+  return Math.min(0.92, Math.max(0.4, quality));
 };
 
-// Convert internal quality (50-100) to displayed percentage (100-200)
+// Convert internal quality (0.4-0.92) to displayed percentage (50-200)
 export const internalToDisplayedQuality = (internal: number): number => {
-  return internal * 2;
+  // Inverse of above
+  const displayed = 50 + ((internal - 0.4) / 0.52) * 150;
+  return Math.round(Math.min(200, Math.max(50, displayed)));
 };

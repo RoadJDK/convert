@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { X, Sparkles, Loader2, Percent, HardDrive } from 'lucide-react';
+import { Sparkles, Loader2, Percent, HardDrive } from 'lucide-react';
 import { QualitySettings, QualityMode } from '@/types/converter';
 
 interface BulkSettingsSidebarProps {
@@ -46,14 +46,15 @@ export const BulkSettingsSidebar = ({
   };
 
   return (
-    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <SheetContent side="right" className="w-full sm:w-[400px] sm:max-w-md">
+    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()} modal={false}>
+      <SheetContent 
+        side="right" 
+        className="w-[320px] h-auto max-h-[50vh] top-auto bottom-8 right-4 rounded-xl shadow-xl border"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <SheetHeader className="pb-4 border-b">
-          <SheetTitle className="flex items-center justify-between">
-            <span>{selectedCount} Datei{selectedCount !== 1 ? 'en' : ''} ausgewählt</span>
-            <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
-              <X className="h-4 w-4" />
-            </Button>
+          <SheetTitle>
+            {selectedCount} Datei{selectedCount !== 1 ? 'en' : ''} ausgewählt
           </SheetTitle>
         </SheetHeader>
 
