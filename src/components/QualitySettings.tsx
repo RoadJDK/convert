@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings2, Percent, HardDrive, Maximize } from 'lucide-react';
+import { Settings2, Percent, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
@@ -30,10 +30,6 @@ export const QualitySettings = ({ settings, onChange, disabled }: QualitySetting
     if (!isNaN(num) && num > 0) {
       onChange({ ...settings, maxSizeKB: num });
     }
-  };
-
-  const handleScaleChange = (value: number[]) => {
-    onChange({ ...settings, scale: value[0] });
   };
 
   // Display percentage (100% = internal 50%, 200% = internal 100%)
@@ -102,29 +98,6 @@ export const QualitySettings = ({ settings, onChange, disabled }: QualitySetting
               </p>
             </TabsContent>
           </Tabs>
-
-          {/* Scale/Upscaling Section */}
-          <div className="border-t pt-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <Maximize className="h-4 w-4 text-muted-foreground" />
-              <Label className="text-sm font-medium">Skalierung</Label>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Größe</span>
-              <span className="text-sm font-medium">{settings.scale}%</span>
-            </div>
-            <Slider
-              value={[settings.scale]}
-              onValueChange={handleScaleChange}
-              min={10}
-              max={200}
-              step={10}
-              className="w-full"
-            />
-            <p className="text-xs text-muted-foreground">
-              {settings.scale < 100 ? 'Verkleinern' : settings.scale > 100 ? 'Vergrößern (Upscaling)' : 'Originalgröße'}
-            </p>
-          </div>
         </div>
       </PopoverContent>
     </Popover>

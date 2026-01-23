@@ -167,9 +167,6 @@ export const FileCard = ({
             {file.trimRange && (
               <span className="ml-2 text-accent">• Geschnitten</span>
             )}
-            {file.qualitySettings.scale !== 100 && (
-              <span className="ml-2 text-accent">• {file.qualitySettings.scale}%</span>
-            )}
           </p>
 
           {/* Quality indicator for pending files */}
@@ -237,18 +234,13 @@ export const FileCard = ({
                 >
                   <Crop className="h-4 w-4" />
                 </Button>
-                {onAIRename && (
+                {onAIRename && renameHelperEnabled && (
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={onAIRename}
-                    disabled={isAIRenaming || !renameHelperEnabled}
-                    className={cn(
-                      "h-8 w-8 p-0",
-                      renameHelperEnabled 
-                        ? "text-primary hover:text-primary/80" 
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
+                    disabled={isAIRenaming}
+                    className="h-8 w-8 p-0 text-primary hover:text-primary/80"
                     title="KI-Umbenennung"
                   >
                     {isAIRenaming ? (

@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { X, Sparkles, Loader2, Maximize } from 'lucide-react';
+import { X, Sparkles, Loader2 } from 'lucide-react';
 import { QualitySettings, QualityMode } from '@/types/converter';
 
 interface BulkSettingsBarProps {
@@ -28,13 +28,12 @@ export const BulkSettingsBar = ({
   onToggleRenameHelper,
 }: BulkSettingsBarProps) => {
   const [mode, setMode] = useState<QualityMode>('percentage');
-  const [percentage, setPercentage] = useState(100); // Displayed as 100%, maps to 50% internal
+  const [percentage, setPercentage] = useState(100);
   const [maxSizeKB, setMaxSizeKB] = useState(500);
-  const [scale, setScale] = useState(100);
 
   const handleApply = () => {
     onApply({
-      qualitySettings: { mode, percentage, maxSizeKB, scale },
+      qualitySettings: { mode, percentage, maxSizeKB, scale: 100 },
     });
   };
 
@@ -122,22 +121,6 @@ export const BulkSettingsBar = ({
             </div>
           </TabsContent>
         </Tabs>
-
-        {/* Scale/Upscaling */}
-        <div className="min-w-0 sm:min-w-[150px] space-y-2">
-          <div className="flex items-center gap-2">
-            <Maximize className="h-3 w-3 text-muted-foreground" />
-            <Label className="text-xs">Skalierung</Label>
-            <span className="text-xs font-medium ml-auto">{scale}%</span>
-          </div>
-          <Slider
-            value={[scale]}
-            onValueChange={(v) => setScale(v[0])}
-            min={10}
-            max={200}
-            step={10}
-          />
-        </div>
 
         {/* Actions */}
         <div className="flex items-center gap-2 w-full sm:w-auto">
