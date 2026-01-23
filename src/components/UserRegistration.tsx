@@ -57,28 +57,30 @@ export const UserRegistration = ({ onComplete }: UserRegistrationProps) => {
 
     try {
       // Create anonymous session for edge function authentication
-      const { error: authError } = await supabase.auth.signInAnonymously();
+      const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
       
-      if (authError) {
+      if (authError || !authData.user) {
         console.error("Auth error:", authError);
         toast.error("Registrierung fehlgeschlagen. Bitte erneut versuchen.");
         return;
       }
 
+      const userId = authData.user.id;
       const emailLower = email.trim().toLowerCase();
 
-      // Check if user already exists, if not create new profile
+      // Check if user already has a profile, if not create new profile
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('id, first_name, last_name')
-        .eq('email', emailLower)
+        .eq('user_id', userId)
         .single();
 
       if (!existingProfile) {
-        // Create new profile in database
+        // Create new profile in database linked to authenticated user
         const { error: insertError } = await supabase
           .from('profiles')
           .insert({
+            user_id: userId,
             first_name: firstName.trim(),
             last_name: lastName.trim(),
             email: emailLower,

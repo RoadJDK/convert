@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const ALLOWED_ORIGINS = [
   "https://maibach-convert.lovable.app",
@@ -16,6 +17,16 @@ const getCorsHeaders = (origin: string | null) => {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 };
+
+// Input validation schema
+const RequestSchema = z.object({
+  fileName: z.string().min(1).max(255),
+  fileType: z.enum(["image", "video"]),
+  imageData: z.string().optional().refine(
+    (data) => !data || data.length < 5_000_000, // ~5MB base64 limit
+    { message: "Image data too large" }
+  ),
+});
 
 serve(async (req) => {
   const origin = req.headers.get("origin");
@@ -59,7 +70,32 @@ serve(async (req) => {
       );
     }
 
-    const { fileName, fileType, imageData } = await req.json();
+    // Parse and validate input
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const validationResult = RequestSchema.safeParse(body);
+    if (!validationResult.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid input format", details: validationResult.error.errors }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { fileName, fileType, imageData } = validationResult.data;
+    
+    // Sanitize fileName before using in prompt to prevent prompt injection
+    const sanitizedFileName = fileName
+      .trim()
+      .slice(0, 100)
+      .replace(/[^\w\s.\-()]/g, "");
     
     const GROQ_API_KEY = Deno.env.get("CROQ_CLOUD_KEY");
     if (!GROQ_API_KEY) {
@@ -103,7 +139,7 @@ Reply ONLY with the new filename, nothing else.`
           },
           {
             type: "text",
-            text: `Analyze this image and suggest a short, descriptive filename. Original name: "${fileName}"`
+            text: `Analyze this image and suggest a short, descriptive filename. Original name: "${sanitizedFileName}"`
           }
         ]
       });
@@ -111,7 +147,7 @@ Reply ONLY with the new filename, nothing else.`
       // Fallback for videos or when no image data
       messages.push({
         role: "user",
-        content: `Original filename: "${fileName}" (Type: ${fileType}). Suggest a clean, descriptive filename.`
+        content: `Original filename: "${sanitizedFileName}" (Type: ${fileType}). Suggest a clean, descriptive filename.`
       });
     }
 
@@ -148,7 +184,7 @@ Reply ONLY with the new filename, nothing else.`
     }
 
     const data = await response.json();
-    let suggestedName = data.choices?.[0]?.message?.content?.trim() || fileName;
+    let suggestedName = data.choices?.[0]?.message?.content?.trim() || sanitizedFileName;
     
     // Clean up the suggested name
     suggestedName = suggestedName

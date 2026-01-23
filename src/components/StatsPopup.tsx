@@ -2,7 +2,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Image, Video, Sparkles, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { getUserData } from './UserRegistration';
 
 interface StatsPopupProps {
   open: boolean;
@@ -27,19 +26,21 @@ export const StatsPopup = ({ open, onClose }: StatsPopupProps) => {
 
   const loadStats = async () => {
     setLoading(true);
-    const userData = getUserData();
     
-    if (!userData?.email) {
-      setStats({ images_converted: 0, videos_converted: 0, ai_renames_used: 0 });
-      setLoading(false);
-      return;
-    }
-
     try {
+      // Get current authenticated user
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user?.id) {
+        setStats({ images_converted: 0, videos_converted: 0, ai_renames_used: 0 });
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('profiles')
         .select('images_converted, videos_converted, ai_renames_used')
-        .eq('email', userData.email)
+        .eq('user_id', user.id)
         .single();
 
       if (error) {
