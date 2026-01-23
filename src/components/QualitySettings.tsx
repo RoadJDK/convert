@@ -1,28 +1,27 @@
 import { useState, useMemo } from 'react';
-import { Settings2, Percent, HardDrive } from 'lucide-react';
+import { Settings2, Percent, HardDrive, Eraser } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { 
   QualitySettings as QualitySettingsType, 
   QualityMode, 
   formatFileSize,
-  IMAGE_OUTPUT_FORMATS,
-  VIDEO_OUTPUT_FORMATS,
   FileType,
-  OutputFormat,
 } from '@/types/converter';
 
 interface QualitySettingsProps {
   settings: QualitySettingsType;
   onChange: (settings: QualitySettingsType) => void;
   disabled?: boolean;
-  originalSize?: number; // Original file size in bytes for estimation
-  fileType?: FileType; // To show correct format options
+  originalSize?: number;
+  fileType?: FileType;
+  removeBackground?: boolean;
+  onRemoveBackgroundChange?: (enabled: boolean) => void;
 }
 
 // Estimate file size based on quality percentage and output format
@@ -72,7 +71,15 @@ function estimateFileSize(originalSize: number, percentage: number, outputFormat
   return Math.round(originalSize * ratio);
 }
 
-export const QualitySettings = ({ settings, onChange, disabled, originalSize, fileType = 'image' }: QualitySettingsProps) => {
+export const QualitySettings = ({ 
+  settings, 
+  onChange, 
+  disabled, 
+  originalSize, 
+  fileType = 'image',
+  removeBackground,
+  onRemoveBackgroundChange,
+}: QualitySettingsProps) => {
   const [open, setOpen] = useState(false);
 
   const handleModeChange = (mode: string) => {
@@ -90,15 +97,10 @@ export const QualitySettings = ({ settings, onChange, disabled, originalSize, fi
     }
   };
 
-  const handleFormatChange = (format: string) => {
-    onChange({ ...settings, outputFormat: format as OutputFormat });
-  };
-
   // Display percentage (100% = internal 50%, 200% = internal 100%)
   const displayPercentage = settings.percentage;
 
   // Get format options based on file type
-  const formatOptions = fileType === 'image' ? IMAGE_OUTPUT_FORMATS : VIDEO_OUTPUT_FORMATS;
   const defaultFormat = fileType === 'image' ? 'webp' : 'webm';
   const currentFormat = settings.outputFormat || defaultFormat;
 
@@ -124,22 +126,19 @@ export const QualitySettings = ({ settings, onChange, disabled, originalSize, fi
         <div className="space-y-4">
           <h4 className="font-medium text-sm">Qualitätseinstellungen</h4>
 
-          {/* Output Format Dropdown */}
-          <div className="space-y-2">
-            <Label className="text-xs">Zielformat</Label>
-            <Select value={currentFormat} onValueChange={handleFormatChange}>
-              <SelectTrigger className="w-full h-8 bg-background">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-popover border border-border shadow-lg z-50">
-                {formatOptions.map((format) => (
-                  <SelectItem key={format.value} value={format.value}>
-                    {format.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Background Removal Toggle (images only) */}
+          {fileType === 'image' && onRemoveBackgroundChange && (
+            <div className="flex items-center justify-between rounded-lg border border-border p-3 bg-secondary/30">
+              <div className="flex items-center gap-2">
+                <Eraser className="h-4 w-4 text-muted-foreground" />
+                <Label className="text-xs font-medium">Hintergrund entfernen</Label>
+              </div>
+              <Switch
+                checked={removeBackground}
+                onCheckedChange={onRemoveBackgroundChange}
+              />
+            </div>
+          )}
           
           <Tabs value={settings.mode} onValueChange={handleModeChange}>
             <TabsList className="grid w-full grid-cols-2">
