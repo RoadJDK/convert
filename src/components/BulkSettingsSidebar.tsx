@@ -49,7 +49,7 @@ export const BulkSettingsSidebar = ({
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()} modal={false}>
       <SheetContent 
         side="right" 
-        className="w-[340px] !h-auto !max-h-[60vh] !top-1/2 !-translate-y-1/2 !right-1/2 !translate-x-1/2 !rounded-xl shadow-2xl border !inset-auto fixed"
+        className="w-[340px] !h-auto !max-h-[60vh] !top-1/2 !-translate-y-1/2 !right-4 !left-auto !translate-x-0 !rounded-xl shadow-2xl border !inset-auto fixed"
         onInteractOutside={(e) => e.preventDefault()}
       >
         <SheetHeader className="pb-4 border-b">

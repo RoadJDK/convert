@@ -20,16 +20,16 @@ export const useVideoConverter = () => {
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
 
-    // Use the official CDN with latest stable version (UMD build for better compatibility)
-    const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
+    // Use the official CDN UMD build - most stable for browsers
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
 
-    // Helpful while debugging in-browser; harmless in prod.
     ffmpeg.on('log', ({ message }) => {
       // eslint-disable-next-line no-console
       console.log('[ffmpeg]', message);
     });
 
     try {
+      // Load core and wasm only (no worker for single-threaded mode)
       await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
@@ -38,10 +38,9 @@ export const useVideoConverter = () => {
       return ffmpeg;
     } catch (loadError) {
       console.error('FFmpeg load error:', loadError);
-      // Reset state so user can try again
       loadedRef.current = false;
       ffmpegRef.current = null;
-      throw new Error('Video-Konvertierung nicht verfügbar. Versuche es mit einem Bild oder lade die Seite neu.');
+      throw new Error('Video-Konvertierung nicht verfügbar. Bitte Seite neu laden.');
     }
   }, []);
 
