@@ -1,5 +1,6 @@
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 import { QualitySettings, CropArea, displayedToInternalQuality, getOutputMimeType, ImageOutputFormat } from '@/types/converter';
+import { encode as encodeWebp } from '@jsquash/webp';
 
 interface ConversionResult {
   blob: Blob;
@@ -10,7 +11,7 @@ interface ConversionOptions {
   qualitySettings: QualitySettings;
   cropArea?: CropArea;
   dimensions?: { width: number; height: number };
-  addWhiteBackground?: boolean; // For converting transparent images to non-transparent formats
+  addWhiteBackground?: boolean;
 }
 
 // Detect Safari/WebKit - Safari has issues with WebP quality parameter
@@ -18,21 +19,25 @@ const isSafari = (): boolean => {
   return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 };
 
-// Test if the browser properly supports quality parameter for a given format
-// Safari ignores quality for WebP in canvas.toBlob()
-const supportsQualityForFormat = async (format: string): Promise<boolean> => {
-  // PNG, GIF, BMP don't support quality parameter anyway
-  if (['png', 'gif', 'bmp'].includes(format)) return true;
-  
-  // Safari has known issues with WebP quality
-  if (isSafari() && format === 'webp') {
-    return false;
-  }
-  
-  return true;
+// Get ImageData from canvas
+const getImageData = (canvas: HTMLCanvasElement): ImageData => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Failed to get canvas context');
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
 };
 
-// Convert canvas to blob using a format that supports quality, then convert if needed
+// Convert canvas to WebP using @jsquash/webp (WASM-based, works everywhere including Safari)
+const canvasToWebpViaWasm = async (
+  canvas: HTMLCanvasElement,
+  quality: number // 0-100 scale
+): Promise<Blob> => {
+  const imageData = getImageData(canvas);
+  const webpBuffer = await encodeWebp(imageData, { quality });
+  return new Blob([webpBuffer], { type: 'image/webp' });
+};
+
+// Convert canvas to blob with quality support
+// For WebP on Safari, use WASM encoder as fallback if native fails
 const canvasToBlobWithQuality = async (
   canvas: HTMLCanvasElement,
   targetFormat: ImageOutputFormat,
@@ -40,63 +45,30 @@ const canvasToBlobWithQuality = async (
 ): Promise<Blob> => {
   const mimeType = getOutputMimeType('image', targetFormat);
   
-  // For Safari + WebP: Use JPEG as intermediate format to apply quality
-  if (isSafari() && targetFormat === 'webp') {
-    // Safari doesn't respect quality for WebP, so we:
-    // 1. Convert to JPEG with quality (which Safari supports)
-    // 2. Return as JPEG-quality-equivalent WebP via toBlob without quality
-    //    (Safari will use default quality which is similar to our JPEG)
-    
-    // Actually, a better approach: Convert with JPEG quality first, 
-    // then re-render that to WebP. This applies the quality compression.
-    const jpegQuality = quality ?? 0.75;
-    
-    return new Promise((resolve, reject) => {
+  // For WebP, try native first, then WASM fallback if result is not actually WebP
+  if (targetFormat === 'webp') {
+    // Try native canvas.toBlob first
+    const nativeBlob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob(
-        (jpegBlob) => {
-          if (!jpegBlob) {
-            reject(new Error('Failed to create JPEG blob'));
-            return;
-          }
-          
-          // Now load this JPEG and convert to WebP
-          const img = new Image();
-          img.onload = () => {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            const ctx = tempCanvas.getContext('2d');
-            if (!ctx) {
-              reject(new Error('Failed to create temp canvas context'));
-              return;
-            }
-            ctx.drawImage(img, 0, 0);
-            
-            // Now convert to WebP - the quality is already baked into the image
-            tempCanvas.toBlob(
-              (webpBlob) => {
-                URL.revokeObjectURL(img.src);
-                if (webpBlob) {
-                  resolve(webpBlob);
-                } else {
-                  reject(new Error('Failed to create WebP blob'));
-                }
-              },
-              'image/webp'
-            );
-          };
-          img.onerror = () => {
-            reject(new Error('Failed to load intermediate JPEG'));
-          };
-          img.src = URL.createObjectURL(jpegBlob);
-        },
-        'image/jpeg',
-        jpegQuality
+        (blob) => resolve(blob),
+        'image/webp',
+        quality
       );
     });
+    
+    // Check if we actually got WebP (Safari often returns PNG instead)
+    if (nativeBlob && nativeBlob.type === 'image/webp') {
+      console.log('[ImageConverter] Native WebP encoding succeeded');
+      return nativeBlob;
+    }
+    
+    // Fallback to WASM encoder for Safari
+    console.log('[ImageConverter] Native WebP failed/returned wrong type, using WASM encoder');
+    const wasmQuality = quality !== undefined ? Math.round(quality * 100) : 75;
+    return await canvasToWebpViaWasm(canvas, wasmQuality);
   }
   
-  // Standard path for browsers with proper WebP quality support
+  // Standard path for other formats
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
@@ -137,7 +109,6 @@ export const useImageConverter = () => {
           
           // Determine output format and mime type
           const outputFormat = (qualitySettings.outputFormat as ImageOutputFormat) || 'webp';
-          const mimeType = getOutputMimeType('image', outputFormat);
 
           // Calculate source dimensions (for cropping)
           const sx = cropArea?.x ?? 0;
@@ -183,7 +154,7 @@ export const useImageConverter = () => {
           ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
           onProgress(60);
 
-        if (qualitySettings.mode === 'percentage') {
+          if (qualitySettings.mode === 'percentage') {
             // For PNG, quality parameter is ignored (lossless format)
             // For other formats, use displayedToInternalQuality mapping
             const quality = outputFormat === 'png' 
@@ -226,7 +197,7 @@ export const useImageConverter = () => {
                 // For PNG, quality doesn't apply
                 if (outputFormat === 'png') {
                   return new Promise((res) => {
-                    canvas.toBlob((blob) => res(blob), mimeType);
+                    canvas.toBlob((blob) => res(blob), 'image/png');
                   });
                 }
                 return await canvasToBlobWithQuality(canvas, outputFormat, quality);
