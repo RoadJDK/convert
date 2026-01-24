@@ -12,6 +12,8 @@ import {
   QualityMode, 
   formatFileSize,
   FileType,
+  CropArea,
+  displayedToInternalQuality,
 } from '@/types/converter';
 
 interface QualitySettingsProps {
@@ -19,63 +21,142 @@ interface QualitySettingsProps {
   onChange: (settings: QualitySettingsType) => void;
   disabled?: boolean;
   originalSize?: number;
+  originalFormat?: string; // e.g., 'image/png', 'image/jpeg'
+  originalDimensions?: { width: number; height: number };
+  cropArea?: CropArea;
   fileType?: FileType;
   removeBackground?: boolean;
   onRemoveBackgroundChange?: (enabled: boolean) => void;
 }
 
-// Estimate file size based on quality percentage and output format
-// IMPORTANT: This estimates based on RE-ENCODING, not the original format
-// Re-encoding typically produces files close to or LARGER than original when quality is high
-function estimateFileSize(originalSize: number, percentage: number, outputFormat: string, fileType: 'image' | 'video'): number {
-  // Internal quality: 100% displayed = 50% internal, 200% = 100%
-  const internalQuality = percentage / 2;
-  
-  // IMAGE FORMATS
-  if (fileType === 'image') {
-    // PNG is lossless - re-encoding keeps similar or larger size
-    if (outputFormat === 'png') {
-      return Math.round(originalSize * 1.1);
-    }
-    
-    // For same-format or lossy re-encoding (JPEG, WebP)
-    // Quality 100% displayed (50% internal) = ~0.5 quality = moderate compression
-    // Quality 200% displayed (100% internal, capped at 92%) = ~0.92 quality = minimal compression
-    
-    // JPEG: At high quality, can be LARGER than original due to re-encoding
-    if (outputFormat === 'jpeg') {
-      // Map: 50% displayed (25% internal) = 0.3x, 100% (50%) = 0.8x, 200% (92%) = 1.2x
-      const qualityFactor = internalQuality / 100; // 0.25 to 0.92
-      const ratio = 0.3 + qualityFactor * 1.0; // 0.55 at 100%, 1.2 at max
-      return Math.round(originalSize * ratio);
-    }
-    
-    // WebP: Generally more efficient than JPEG but still can grow at high quality
-    // Map: 50% displayed = 0.2x, 100% = 0.5x, 200% = 0.9x
-    const qualityFactor = internalQuality / 100;
-    const ratio = 0.2 + qualityFactor * 0.7;
-    return Math.round(originalSize * ratio);
+// Bytes per pixel estimates for different formats at different quality levels
+// Based on empirical testing with typical photographic content
+const FORMAT_COMPRESSION_RATIOS: Record<string, { 
+  lossless: number;  // bytes per pixel at max quality
+  lossy: (quality: number) => number;  // function of internal quality (0-1)
+}> = {
+  // WebP: Excellent compression
+  webp: {
+    lossless: 2.5,
+    lossy: (q) => 0.15 + q * 0.85, // 0.15-1.0 bpp
+  },
+  // JPEG: Good compression, no alpha
+  jpeg: {
+    lossless: 1.5, // JPEG is always lossy, this is "max quality"
+    lossy: (q) => 0.1 + q * 0.9, // 0.1-1.0 bpp
+  },
+  // PNG: Lossless, larger files
+  png: {
+    lossless: 3.0,
+    lossy: (q) => 3.0, // PNG doesn't have quality settings
+  },
+  // AVIF: Best compression
+  avif: {
+    lossless: 2.0,
+    lossy: (q) => 0.08 + q * 0.6, // 0.08-0.68 bpp
+  },
+  // GIF: Limited colors, larger
+  gif: {
+    lossless: 1.5,
+    lossy: (q) => 1.5, // GIF is palette-based
+  },
+  // BMP: Uncompressed
+  bmp: {
+    lossless: 3.0,
+    lossy: (q) => 3.0,
+  },
+};
+
+// Estimate output dimensions considering crop and scale
+function getOutputDimensions(
+  originalDimensions: { width: number; height: number } | undefined,
+  cropArea: CropArea | undefined,
+  scale: number
+): { width: number; height: number } {
+  if (!originalDimensions) {
+    return { width: 1920, height: 1080 }; // fallback estimate
   }
   
-  // VIDEO FORMATS
-  // Video re-encoding is complex and depends heavily on content
-  if (outputFormat === 'mp4') {
-    const qualityFactor = internalQuality / 100;
-    const ratio = 0.3 + qualityFactor * 0.5;
-    return Math.round(originalSize * ratio);
+  let width = cropArea?.width ?? originalDimensions.width;
+  let height = cropArea?.height ?? originalDimensions.height;
+  
+  // Apply scale
+  const scaleFactor = scale / 100;
+  width = Math.round(width * scaleFactor);
+  height = Math.round(height * scaleFactor);
+  
+  return { width, height };
+}
+
+// Accurate file size estimation based on format conversion
+function estimateFileSize(
+  originalSize: number,
+  originalFormat: string | undefined,
+  outputFormat: string,
+  percentage: number,
+  originalDimensions: { width: number; height: number } | undefined,
+  cropArea: CropArea | undefined,
+  scale: number,
+  fileType: 'image' | 'video'
+): number {
+  // For videos, use simpler estimation
+  if (fileType === 'video') {
+    const internalQuality = percentage / 200; // 0.25-1.0
+    const baseRatio = outputFormat === 'webm' ? 0.6 : 0.7;
+    return Math.round(originalSize * baseRatio * (0.3 + internalQuality * 0.7));
   }
   
-  // WebM
-  const qualityFactor = internalQuality / 100;
-  const ratio = 0.25 + qualityFactor * 0.55;
-  return Math.round(originalSize * ratio);
+  // Get output dimensions
+  const outputDims = getOutputDimensions(originalDimensions, cropArea, scale);
+  const pixelCount = outputDims.width * outputDims.height;
+  
+  // Get format compression info
+  const formatKey = outputFormat.toLowerCase();
+  const formatInfo = FORMAT_COMPRESSION_RATIOS[formatKey] || FORMAT_COMPRESSION_RATIOS.webp;
+  
+  // Calculate internal quality (0.4-0.92 range)
+  const internalQuality = displayedToInternalQuality(percentage);
+  
+  // Calculate bytes per pixel based on quality
+  let bytesPerPixel: number;
+  if (formatKey === 'png' || formatKey === 'bmp' || formatKey === 'gif') {
+    // Lossless/fixed formats
+    bytesPerPixel = formatInfo.lossless;
+  } else {
+    // Lossy formats
+    bytesPerPixel = formatInfo.lossy(internalQuality);
+  }
+  
+  // Estimate base size from pixel count
+  let estimatedSize = pixelCount * bytesPerPixel;
+  
+  // Adjust based on source format (complexity estimation)
+  // If source is already compressed (JPEG), content is likely photo-like
+  // If source is PNG, content might be graphics with flat colors (compresses better)
+  const sourceFormat = originalFormat?.toLowerCase() || '';
+  if (sourceFormat.includes('png') || sourceFormat.includes('gif')) {
+    // PNG/GIF often has flat colors, compresses better
+    estimatedSize *= 0.7;
+  } else if (sourceFormat.includes('bmp') || sourceFormat.includes('tiff')) {
+    // Uncompressed sources might have more noise
+    estimatedSize *= 0.9;
+  }
+  // JPEG sources are already compressed, estimation should be close
+  
+  // Apply minimum size (headers, metadata)
+  const minSize = 1024; // 1KB minimum
+  
+  return Math.max(minSize, Math.round(estimatedSize));
 }
 
 export const QualitySettings = ({ 
   settings, 
   onChange, 
   disabled, 
-  originalSize, 
+  originalSize,
+  originalFormat,
+  originalDimensions,
+  cropArea,
   fileType = 'image',
   removeBackground,
   onRemoveBackgroundChange,
@@ -104,11 +185,20 @@ export const QualitySettings = ({
   const defaultFormat = fileType === 'image' ? 'webp' : 'webm';
   const currentFormat = settings.outputFormat || defaultFormat;
 
-  // Estimate file size based on quality and format
+  // Estimate file size based on quality, format, dimensions, and crop
   const estimatedSize = useMemo(() => {
     if (!originalSize || settings.mode !== 'percentage') return null;
-    return estimateFileSize(originalSize, settings.percentage, currentFormat, fileType);
-  }, [originalSize, settings.percentage, settings.mode, currentFormat, fileType]);
+    return estimateFileSize(
+      originalSize,
+      originalFormat,
+      currentFormat,
+      settings.percentage,
+      originalDimensions,
+      cropArea,
+      settings.scale,
+      fileType
+    );
+  }, [originalSize, originalFormat, settings.percentage, settings.scale, settings.mode, currentFormat, originalDimensions, cropArea, fileType]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
