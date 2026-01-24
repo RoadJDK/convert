@@ -183,15 +183,29 @@ export const useImageConverter = () => {
           ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
           onProgress(60);
 
-          if (qualitySettings.mode === 'percentage') {
+        if (qualitySettings.mode === 'percentage') {
             // For PNG, quality parameter is ignored (lossless format)
             // For other formats, use displayedToInternalQuality mapping
             const quality = outputFormat === 'png' 
               ? undefined 
               : displayedToInternalQuality(qualitySettings.percentage);
             
+            // Debug logging
+            console.log('[ImageConverter] Converting with settings:', {
+              displayedPercentage: qualitySettings.percentage,
+              internalQuality: quality,
+              outputFormat,
+              isSafariBrowser: isSafari(),
+              canvasSize: `${canvas.width}x${canvas.height}`
+            });
+            
             try {
               const blob = await canvasToBlobWithQuality(canvas, outputFormat, quality);
+              console.log('[ImageConverter] Conversion result:', {
+                blobSize: blob.size,
+                blobType: blob.type,
+                expectedFormat: outputFormat
+              });
               onProgress(100);
               const url = URL.createObjectURL(blob);
               resolve({ blob, url });
