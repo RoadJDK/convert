@@ -91,12 +91,9 @@ export const useImageConverter = () => {
               ? undefined 
               : displayedToInternalQuality(qualitySettings.percentage);
             
-            console.log(`Converting to ${outputFormat} with quality: ${quality} (from ${qualitySettings.percentage}%)`);
-            
             canvas.toBlob(
               (blob) => {
                 if (blob) {
-                  console.log(`Converted blob size: ${blob.size} bytes`);
                   onProgress(100);
                   const url = URL.createObjectURL(blob);
                   resolve({ blob, url });

@@ -50,15 +50,32 @@ export const FileCard = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [originalDimensions, setOriginalDimensions] = useState<{ width: number; height: number } | undefined>();
 
   const extension = getOutputExtension(file.type, file.qualitySettings.outputFormat);
 
-  // Generate preview URL for images
+  // Generate preview URL and get dimensions for images
   useEffect(() => {
     if (file.type === 'image') {
       const url = URL.createObjectURL(file.file);
       setPreviewUrl(url);
+      
+      // Get image dimensions
+      const img = new window.Image();
+      img.onload = () => {
+        setOriginalDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.src = url;
+      
       return () => URL.revokeObjectURL(url);
+    } else if (file.type === 'video') {
+      // Get video dimensions
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        setOriginalDimensions({ width: video.videoWidth, height: video.videoHeight });
+      };
+      video.src = URL.createObjectURL(file.file);
     }
   }, [file.file, file.type]);
 
@@ -247,6 +264,9 @@ export const FileCard = ({
                   settings={file.qualitySettings}
                   onChange={onSettingsChange}
                   originalSize={file.originalSize}
+                  originalFormat={file.file.type}
+                  originalDimensions={originalDimensions}
+                  cropArea={file.cropArea}
                   fileType={file.type}
                   removeBackground={removeBackgroundEnabled}
                   onRemoveBackgroundChange={onToggleRemoveBackground}
