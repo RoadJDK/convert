@@ -85,12 +85,18 @@ export const useImageConverter = () => {
           onProgress(60);
 
           if (qualitySettings.mode === 'percentage') {
-            // displayedToInternalQuality now returns 0.4-0.92 directly
-            const quality = outputFormat === 'png' ? undefined : displayedToInternalQuality(qualitySettings.percentage);
+            // For PNG, quality parameter is ignored (lossless format)
+            // For other formats, use displayedToInternalQuality mapping
+            const quality = outputFormat === 'png' 
+              ? undefined 
+              : displayedToInternalQuality(qualitySettings.percentage);
+            
+            console.log(`Converting to ${outputFormat} with quality: ${quality} (from ${qualitySettings.percentage}%)`);
             
             canvas.toBlob(
               (blob) => {
                 if (blob) {
+                  console.log(`Converted blob size: ${blob.size} bytes`);
                   onProgress(100);
                   const url = URL.createObjectURL(blob);
                   resolve({ blob, url });
