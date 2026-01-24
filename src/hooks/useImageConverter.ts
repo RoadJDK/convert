@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { QualitySettings, CropArea, displayedToInternalQuality, getOutputMimeType, ImageOutputFormat } from '@/types/converter';
 
 interface ConversionResult {
@@ -12,6 +12,105 @@ interface ConversionOptions {
   dimensions?: { width: number; height: number };
   addWhiteBackground?: boolean; // For converting transparent images to non-transparent formats
 }
+
+// Detect Safari/WebKit - Safari has issues with WebP quality parameter
+const isSafari = (): boolean => {
+  return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+};
+
+// Test if the browser properly supports quality parameter for a given format
+// Safari ignores quality for WebP in canvas.toBlob()
+const supportsQualityForFormat = async (format: string): Promise<boolean> => {
+  // PNG, GIF, BMP don't support quality parameter anyway
+  if (['png', 'gif', 'bmp'].includes(format)) return true;
+  
+  // Safari has known issues with WebP quality
+  if (isSafari() && format === 'webp') {
+    return false;
+  }
+  
+  return true;
+};
+
+// Convert canvas to blob using a format that supports quality, then convert if needed
+const canvasToBlobWithQuality = async (
+  canvas: HTMLCanvasElement,
+  targetFormat: ImageOutputFormat,
+  quality: number | undefined
+): Promise<Blob> => {
+  const mimeType = getOutputMimeType('image', targetFormat);
+  
+  // For Safari + WebP: Use JPEG as intermediate format to apply quality
+  if (isSafari() && targetFormat === 'webp') {
+    // Safari doesn't respect quality for WebP, so we:
+    // 1. Convert to JPEG with quality (which Safari supports)
+    // 2. Return as JPEG-quality-equivalent WebP via toBlob without quality
+    //    (Safari will use default quality which is similar to our JPEG)
+    
+    // Actually, a better approach: Convert with JPEG quality first, 
+    // then re-render that to WebP. This applies the quality compression.
+    const jpegQuality = quality ?? 0.75;
+    
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (jpegBlob) => {
+          if (!jpegBlob) {
+            reject(new Error('Failed to create JPEG blob'));
+            return;
+          }
+          
+          // Now load this JPEG and convert to WebP
+          const img = new Image();
+          img.onload = () => {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const ctx = tempCanvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('Failed to create temp canvas context'));
+              return;
+            }
+            ctx.drawImage(img, 0, 0);
+            
+            // Now convert to WebP - the quality is already baked into the image
+            tempCanvas.toBlob(
+              (webpBlob) => {
+                URL.revokeObjectURL(img.src);
+                if (webpBlob) {
+                  resolve(webpBlob);
+                } else {
+                  reject(new Error('Failed to create WebP blob'));
+                }
+              },
+              'image/webp'
+            );
+          };
+          img.onerror = () => {
+            reject(new Error('Failed to load intermediate JPEG'));
+          };
+          img.src = URL.createObjectURL(jpegBlob);
+        },
+        'image/jpeg',
+        jpegQuality
+      );
+    });
+  }
+  
+  // Standard path for browsers with proper WebP quality support
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error('Failed to create blob'));
+        }
+      },
+      mimeType,
+      quality
+    );
+  });
+};
 
 export const useImageConverter = () => {
   const convertImage = useCallback(
@@ -91,19 +190,14 @@ export const useImageConverter = () => {
               ? undefined 
               : displayedToInternalQuality(qualitySettings.percentage);
             
-            canvas.toBlob(
-              (blob) => {
-                if (blob) {
-                  onProgress(100);
-                  const url = URL.createObjectURL(blob);
-                  resolve({ blob, url });
-                } else {
-                  reject(new Error('Failed to convert image'));
-                }
-              },
-              mimeType,
-              quality
-            );
+            try {
+              const blob = await canvasToBlobWithQuality(canvas, outputFormat, quality);
+              onProgress(100);
+              const url = URL.createObjectURL(blob);
+              resolve({ blob, url });
+            } catch (err) {
+              reject(err);
+            }
           } else {
             // Binary search for target file size
             const targetBytes = qualitySettings.maxSizeKB * 1024;
@@ -113,15 +207,18 @@ export const useImageConverter = () => {
             let iterations = 0;
             const maxIterations = 8;
 
-            const tryQuality = (quality: number): Promise<Blob | null> => {
-              return new Promise((res) => {
-                canvas.toBlob(
-                  (blob) => res(blob),
-                  mimeType,
-                  // PNG doesn't support quality
-                  outputFormat === 'png' ? undefined : quality
-                );
-              });
+            const tryQuality = async (quality: number): Promise<Blob | null> => {
+              try {
+                // For PNG, quality doesn't apply
+                if (outputFormat === 'png') {
+                  return new Promise((res) => {
+                    canvas.toBlob((blob) => res(blob), mimeType);
+                  });
+                }
+                return await canvasToBlobWithQuality(canvas, outputFormat, quality);
+              } catch {
+                return null;
+              }
             };
 
             onProgress(70);
