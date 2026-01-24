@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { ConvertibleFile, getFileType, getOutputExtension, QualitySettings, CropArea, TrimRange, DEFAULT_QUALITY_SETTINGS, ImageOutputFormat } from '@/types/converter';
+import { ConvertibleFile, getFileType, getOutputExtension, QualitySettings, CropArea, TrimRange, DEFAULT_QUALITY_SETTINGS, DEFAULT_VIDEO_QUALITY_SETTINGS, ImageOutputFormat } from '@/types/converter';
 import { useImageConverter } from './useImageConverter';
 import { useVideoConverter } from './useVideoConverter';
 import { useStatsTracker } from './useStatsTracker';
@@ -58,6 +58,11 @@ export const useFileConverter = () => {
         const type = getFileType(file);
         if (!type) return null;
 
+        // Use appropriate default settings based on file type
+        const defaultSettings = type === 'video' 
+          ? { ...DEFAULT_VIDEO_QUALITY_SETTINGS }
+          : { ...DEFAULT_QUALITY_SETTINGS };
+
         return {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           file,
@@ -65,7 +70,7 @@ export const useFileConverter = () => {
           status: 'pending' as const,
           progress: 0,
           originalName: file.name,
-          qualitySettings: { ...DEFAULT_QUALITY_SETTINGS },
+          qualitySettings: defaultSettings,
           originalSize: file.size,
         };
       })

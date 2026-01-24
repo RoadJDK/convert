@@ -52,9 +52,18 @@ export interface ConvertibleFile {
 
 export const DEFAULT_QUALITY_SETTINGS: QualitySettings = {
   mode: 'percentage',
-  percentage: 100, // Displayed as 100%, internally maps to 50% quality
+  percentage: 100, // Displayed as 100%, internally maps to ~0.57 quality
   maxSizeKB: 500,
   scale: 100,
+  outputFormat: 'webp', // Default output format for images
+};
+
+export const DEFAULT_VIDEO_QUALITY_SETTINGS: QualitySettings = {
+  mode: 'percentage',
+  percentage: 100,
+  maxSizeKB: 5000,
+  scale: 100,
+  outputFormat: 'webm', // Default output format for videos
 };
 
 export const SUPPORTED_IMAGE_FORMATS = [
