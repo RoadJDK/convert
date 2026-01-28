@@ -29,41 +29,62 @@ interface QualitySettingsProps {
   onRemoveBackgroundChange?: (enabled: boolean) => void;
 }
 
-// Bytes per pixel estimates for different formats at different quality levels
-// Based on empirical testing with typical photographic content
-const FORMAT_COMPRESSION_RATIOS: Record<string, { 
-  lossless: number;  // bytes per pixel at max quality
-  lossy: (quality: number) => number;  // function of internal quality (0-1)
+/**
+ * Compression ratio multipliers for format conversion.
+ * These are multipliers applied to source file size (not pixel-based).
+ *
+ * Based on empirical testing:
+ * - A 95KB JPEG → WebP 50% = ~23KB (0.24x)
+ * - A 95KB JPEG → WebP 100% = ~45KB (0.47x)
+ * - A 95KB JPEG → JPEG 50% = ~69KB (0.73x)
+ * - A 95KB JPEG → JPEG 100% = ~153KB (1.6x, higher quality than source)
+ * - A 95KB JPEG → PNG 100% = ~971KB (10.2x, lossless)
+ */
+const FORMAT_COMPRESSION_MULTIPLIERS: Record<string, {
+  // Base multiplier at 100% quality (compared to typical JPEG source)
+  baseMultiplier: number;
+  // How quality affects size: lowQualityMultiplier at 50%, baseMultiplier at 100%
+  lowQualityMultiplier: number;
+  // Multiplier at 200% quality (max quality / upscaling)
+  highQualityMultiplier: number;
+  // Is this format lossless? (quality slider becomes scale slider)
+  isLossless: boolean;
 }> = {
-  // WebP: Excellent compression
   webp: {
-    lossless: 2.5,
-    lossy: (q) => 0.15 + q * 0.85, // 0.15-1.0 bpp
+    baseMultiplier: 0.5,        // WebP 100% ≈ 50% of JPEG size
+    lowQualityMultiplier: 0.25, // WebP 50% ≈ 25% of JPEG size
+    highQualityMultiplier: 1.0, // WebP 200% ≈ max quality, ~100% of source
+    isLossless: false,
   },
-  // JPEG: Good compression, no alpha
   jpeg: {
-    lossless: 1.5, // JPEG is always lossy, this is "max quality"
-    lossy: (q) => 0.1 + q * 0.9, // 0.1-1.0 bpp
+    baseMultiplier: 1.6,        // JPEG 100% ≈ 160% (higher quality than typical source)
+    lowQualityMultiplier: 0.75, // JPEG 50% ≈ 75% of source
+    highQualityMultiplier: 2.5, // JPEG 200% ≈ 250% (near-lossless quality)
+    isLossless: false,
   },
-  // PNG: Lossless, larger files
   png: {
-    lossless: 3.0,
-    lossy: (q) => 3.0, // PNG doesn't have quality settings
+    baseMultiplier: 10.0,       // PNG 100% ≈ 10x source (lossless, full size)
+    lowQualityMultiplier: 2.5,  // PNG 50% = 0.5x scale = 25% pixels ≈ 2.5x source
+    highQualityMultiplier: 40,  // PNG 200% = 2x scale = 400% pixels ≈ 40x source
+    isLossless: true,
   },
-  // AVIF: Best compression
   avif: {
-    lossless: 2.0,
-    lossy: (q) => 0.08 + q * 0.6, // 0.08-0.68 bpp
+    baseMultiplier: 0.35,       // AVIF 100% ≈ 35% of JPEG (best compression)
+    lowQualityMultiplier: 0.15, // AVIF 50% ≈ 15% of source
+    highQualityMultiplier: 1.5, // AVIF 200% includes 2x scale
+    isLossless: false,
   },
-  // GIF: Limited colors, larger
   gif: {
-    lossless: 1.5,
-    lossy: (q) => 1.5, // GIF is palette-based
+    baseMultiplier: 4.0,        // GIF ≈ 4x source (256 colors, no quality control)
+    lowQualityMultiplier: 4.0,
+    highQualityMultiplier: 16,  // GIF 200% = 2x scale = 4x pixels
+    isLossless: true,
   },
-  // BMP: Uncompressed
   bmp: {
-    lossless: 3.0,
-    lossy: (q) => 3.0,
+    baseMultiplier: 30,         // BMP uncompressed ≈ 30x source
+    lowQualityMultiplier: 7.5,  // BMP 50% = 0.5x scale = 25% pixels
+    highQualityMultiplier: 120, // BMP 200% = 2x scale = 400% pixels
+    isLossless: true,
   },
 };
 
@@ -76,19 +97,28 @@ function getOutputDimensions(
   if (!originalDimensions) {
     return { width: 1920, height: 1080 }; // fallback estimate
   }
-  
+
   let width = cropArea?.width ?? originalDimensions.width;
   let height = cropArea?.height ?? originalDimensions.height;
-  
+
   // Apply scale
   const scaleFactor = scale / 100;
   width = Math.round(width * scaleFactor);
   height = Math.round(height * scaleFactor);
-  
+
   return { width, height };
 }
 
-// Accurate file size estimation based on format conversion
+/**
+ * File size estimation based on source file size and quality/format conversion.
+ *
+ * Key insight: For lossy formats, estimating based on source size is more accurate
+ * than pixel-based estimation, because the source already captures the image complexity.
+ *
+ * For lossless/scaling formats (PNG, BMP, GIF), we consider both:
+ * - Pixel ratio from cropping/scaling
+ * - Format-specific compression characteristics
+ */
 function estimateFileSize(
   originalSize: number,
   originalFormat: string | undefined,
@@ -101,51 +131,77 @@ function estimateFileSize(
 ): number {
   // For videos, use simpler estimation
   if (fileType === 'video') {
-    const internalQuality = percentage / 200; // 0.25-1.0
-    const baseRatio = outputFormat === 'webm' ? 0.6 : 0.7;
-    return Math.round(originalSize * baseRatio * (0.3 + internalQuality * 0.7));
+    const qualityFactor = percentage / 100; // 0.5-2.0
+    const formatMultiplier = outputFormat === 'webm' ? 0.7 : 0.85;
+    // Videos compress well at lower quality, scale roughly with quality
+    return Math.round(originalSize * formatMultiplier * (0.3 + qualityFactor * 0.35));
   }
-  
-  // Get output dimensions
-  const outputDims = getOutputDimensions(originalDimensions, cropArea, scale);
-  const pixelCount = outputDims.width * outputDims.height;
-  
-  // Get format compression info
+
+  // Get format info
   const formatKey = outputFormat.toLowerCase();
-  const formatInfo = FORMAT_COMPRESSION_RATIOS[formatKey] || FORMAT_COMPRESSION_RATIOS.webp;
-  
-  // Calculate internal quality (0.4-0.92 range)
-  const internalQuality = displayedToInternalQuality(percentage);
-  
-  // Calculate bytes per pixel based on quality
-  let bytesPerPixel: number;
-  if (formatKey === 'png' || formatKey === 'bmp' || formatKey === 'gif') {
-    // Lossless/fixed formats
-    bytesPerPixel = formatInfo.lossless;
+  const formatInfo = FORMAT_COMPRESSION_MULTIPLIERS[formatKey] || FORMAT_COMPRESSION_MULTIPLIERS.webp;
+
+  // Calculate pixel ratio from crop and scale
+  let pixelRatio = 1.0;
+  if (originalDimensions) {
+    const originalPixels = originalDimensions.width * originalDimensions.height;
+    const croppedWidth = cropArea?.width ?? originalDimensions.width;
+    const croppedHeight = cropArea?.height ?? originalDimensions.height;
+    const scaleFactor = scale / 100;
+    const outputPixels = (croppedWidth * scaleFactor) * (croppedHeight * scaleFactor);
+    pixelRatio = outputPixels / originalPixels;
   } else {
-    // Lossy formats
-    bytesPerPixel = formatInfo.lossy(internalQuality);
+    // Fallback: use scale directly
+    pixelRatio = (scale / 100) ** 2;
   }
-  
-  // Estimate base size from pixel count
-  let estimatedSize = pixelCount * bytesPerPixel;
-  
-  // Adjust based on source format (complexity estimation)
-  // If source is already compressed (JPEG), content is likely photo-like
-  // If source is PNG, content might be graphics with flat colors (compresses better)
+
+  // Calculate quality-based multiplier
+  let qualityMultiplier: number;
+
+  if (percentage <= 100) {
+    // 50% → lowQualityMultiplier, 100% → baseMultiplier
+    const t = (percentage - 50) / 50; // 0 at 50%, 1 at 100%
+    qualityMultiplier = formatInfo.lowQualityMultiplier +
+      t * (formatInfo.baseMultiplier - formatInfo.lowQualityMultiplier);
+  } else {
+    // 100% → baseMultiplier, 200% → highQualityMultiplier
+    const t = (percentage - 100) / 100; // 0 at 100%, 1 at 200%
+    qualityMultiplier = formatInfo.baseMultiplier +
+      t * (formatInfo.highQualityMultiplier - formatInfo.baseMultiplier);
+  }
+
+  // For lossless formats, size is primarily determined by pixel count
+  // For lossy formats, quality has more impact than pixel count
+  let estimatedSize: number;
+  if (formatInfo.isLossless) {
+    // Lossless: size scales with pixels, multiplier is for format overhead
+    estimatedSize = originalSize * qualityMultiplier;
+  } else {
+    // Lossy: combine quality and pixel effects
+    // Pixel ratio has less impact because lossy formats are adaptive
+    estimatedSize = originalSize * qualityMultiplier * Math.sqrt(pixelRatio);
+  }
+
+  // Adjust based on source format
+  // Converting from PNG/BMP (uncompressed) to lossy → much smaller
+  // Converting from JPEG to PNG → much larger
   const sourceFormat = originalFormat?.toLowerCase() || '';
-  if (sourceFormat.includes('png') || sourceFormat.includes('gif')) {
-    // PNG/GIF often has flat colors, compresses better
-    estimatedSize *= 0.7;
-  } else if (sourceFormat.includes('bmp') || sourceFormat.includes('tiff')) {
-    // Uncompressed sources might have more noise
-    estimatedSize *= 0.9;
+  const sourceIsLossless = sourceFormat.includes('png') ||
+    sourceFormat.includes('bmp') ||
+    sourceFormat.includes('tiff') ||
+    sourceFormat.includes('gif');
+
+  if (sourceIsLossless && !formatInfo.isLossless) {
+    // PNG → WebP/JPEG: Source size is inflated, output will be much smaller
+    estimatedSize *= 0.15;
+  } else if (!sourceIsLossless && formatInfo.isLossless) {
+    // JPEG → PNG: Size will increase significantly
+    // Already accounted for in multipliers
   }
-  // JPEG sources are already compressed, estimation should be close
-  
+
   // Apply minimum size (headers, metadata)
   const minSize = 1024; // 1KB minimum
-  
+
   return Math.max(minSize, Math.round(estimatedSize));
 }
 

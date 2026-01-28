@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { QualitySettings, CropArea, getOutputMimeType, ImageOutputFormat } from "@/types/converter";
-import { encodeWebpWasm, optimisePngWasm } from "@/lib/jsquash";
+import { encodeWebpWasm, encodeAvifWasm, optimisePngWasm } from "@/lib/jsquash";
 
 interface ConversionResult {
   blob: Blob;
@@ -29,6 +29,16 @@ const canvasToWebpViaWasm = async (
   const imageData = getImageData(canvas);
   const webpBuffer = await encodeWebpWasm(imageData, quality);
   return new Blob([webpBuffer], { type: "image/webp" });
+};
+
+// Convert canvas to AVIF using @jsquash/avif (WASM-based, consistent across browsers)
+const canvasToAvifViaWasm = async (
+  canvas: HTMLCanvasElement,
+  quality: number, // 0-100 scale
+): Promise<Blob> => {
+  const imageData = getImageData(canvas);
+  const avifBuffer = await encodeAvifWasm(imageData, quality);
+  return new Blob([avifBuffer], { type: "image/avif" });
 };
 
 // Optimise PNG using OxiPNG WASM (lossless optimization)
@@ -96,6 +106,25 @@ const displayedToPngScale = (displayed: number): number => {
   return displayed / 100;
 };
 
+/**
+ * AVIF quality mapping (for jsquash WASM, 0-100 scale):
+ * - 50% displayed → quality 15 (very aggressive compression)
+ * - 100% displayed → quality 50 (good balance, smaller than WebP)
+ * - 200% displayed → quality 90 (near-lossless)
+ *
+ * AVIF is more efficient than WebP, so we use lower quality values
+ * to achieve similar visual quality.
+ */
+const displayedToAvifQuality = (displayed: number): number => {
+  if (displayed <= 100) {
+    // 50→15, 100→50
+    return Math.round(15 + ((displayed - 50) / 50) * 35);
+  } else {
+    // 100→50, 200→90
+    return Math.round(50 + ((displayed - 100) / 100) * 40);
+  }
+};
+
 // Scale canvas by a factor and return new canvas
 const scaleCanvas = (sourceCanvas: HTMLCanvasElement, scaleFactor: number): HTMLCanvasElement => {
   const newCanvas = document.createElement("canvas");
@@ -116,7 +145,7 @@ const scaleCanvas = (sourceCanvas: HTMLCanvasElement, scaleFactor: number): HTML
 const canvasToBlobWithFormat = async (
   canvas: HTMLCanvasElement,
   targetFormat: ImageOutputFormat,
-  quality?: number, // 0-1 for JPEG, 0-100 for WebP WASM
+  quality?: number, // 0-1 for JPEG, 0-100 for WebP/AVIF WASM
   oxipngLevel: number = 2,
 ): Promise<Blob> => {
   // WebP: Always use WASM for consistency across browsers
@@ -124,6 +153,13 @@ const canvasToBlobWithFormat = async (
     const wasmQuality = quality !== undefined ? Math.round(quality) : 75;
     console.log("[ImageConverter] WebP WASM encoding with quality:", wasmQuality);
     return await canvasToWebpViaWasm(canvas, wasmQuality);
+  }
+
+  // AVIF: Always use WASM (browser support is inconsistent)
+  if (targetFormat === "avif") {
+    const wasmQuality = quality !== undefined ? Math.round(quality) : 50;
+    console.log("[ImageConverter] AVIF WASM encoding with quality:", wasmQuality);
+    return await canvasToAvifViaWasm(canvas, wasmQuality);
   }
 
   // PNG: Use canvas then optimize with OxiPNG
@@ -141,7 +177,7 @@ const canvasToBlobWithFormat = async (
         if (blob) {
           resolve(blob);
         } else {
-          reject(new Error("Failed to create blob"));
+          reject(new Error(`Failed to create ${targetFormat} blob. Format may not be supported.`));
         }
       },
       mimeType,
@@ -248,8 +284,9 @@ export const useImageConverter = () => {
                 console.log("[ImageConverter] JPEG quality:", displayedPct, "% ->", jpegQuality.toFixed(2));
                 blob = await canvasToBlobWithFormat(canvas, "jpeg", jpegQuality);
               } else if (outputFormat === "avif") {
-                // AVIF: Similar to WebP (if browser supports)
-                const avifQuality = displayedToWebpQuality(displayedPct) / 100;
+                // AVIF: Use WASM encoder with 0-100 quality scale
+                const avifQuality = displayedToAvifQuality(displayedPct);
+                console.log("[ImageConverter] AVIF quality:", displayedPct, "% ->", avifQuality);
                 blob = await canvasToBlobWithFormat(canvas, "avif", avifQuality);
               } else {
                 // GIF, BMP: No quality control, just encode
@@ -363,7 +400,7 @@ async function compressPngToMaxSize(
 }
 
 /**
- * Compress lossy format (WebP/JPEG) to max size via binary search
+ * Compress lossy format (WebP/JPEG/AVIF) to max size via binary search
  */
 async function compressLossyToMaxSize(
   canvas: HTMLCanvasElement,
@@ -371,11 +408,12 @@ async function compressLossyToMaxSize(
   targetBytes: number,
   onProgress: (p: number) => void,
 ): Promise<Blob> {
-  const isWebp = format === "webp";
+  // WebP and AVIF use 0-100 scale, JPEG uses 0-1 scale
+  const usesWasmScale = format === "webp" || format === "avif";
 
-  // Quality ranges (WebP: 0-100, JPEG: 0-1)
-  let minQ = isWebp ? 1 : 0.05;
-  let maxQ = isWebp ? 100 : 0.98;
+  // Quality ranges
+  let minQ = usesWasmScale ? 1 : 0.05;
+  let maxQ = usesWasmScale ? 100 : 0.98;
   let bestBlob: Blob | null = null;
   let bestQuality = minQ;
 
@@ -388,7 +426,8 @@ async function compressLossyToMaxSize(
 
     console.log("[ImageConverter] MaxSize binary search:", {
       iteration: i,
-      quality: isWebp ? midQ : midQ.toFixed(2),
+      format,
+      quality: usesWasmScale ? midQ : midQ.toFixed(2),
       size: testBlob.size,
       target: targetBytes,
     });
@@ -402,7 +441,7 @@ async function compressLossyToMaxSize(
     }
 
     // Converged
-    if ((isWebp && maxQ - minQ < 2) || (!isWebp && maxQ - minQ < 0.02)) {
+    if ((usesWasmScale && maxQ - minQ < 2) || (!usesWasmScale && maxQ - minQ < 0.02)) {
       break;
     }
 
@@ -424,7 +463,7 @@ async function compressLossyToMaxSize(
 
     for (let i = 0; i < 5 && bestBlob.size > targetBytes; i++) {
       const scaledCanvas = scaleCanvas(canvas, scaleFactor);
-      bestBlob = await canvasToBlobWithFormat(scaledCanvas, format, isWebp ? 50 : 0.5);
+      bestBlob = await canvasToBlobWithFormat(scaledCanvas, format, usesWasmScale ? 50 : 0.5);
 
       console.log("[ImageConverter] Scale iteration:", {
         scale: scaleFactor.toFixed(2),
