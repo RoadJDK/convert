@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
 import { QualitySettings, CropArea, displayedToInternalQuality, getOutputMimeType, ImageOutputFormat } from '@/types/converter';
-import { encode as encodeWebp } from '@jsquash/webp';
-import { optimise as optimisePng } from '@jsquash/oxipng';
+import { encodeWebpWasm, optimisePngWasm } from '@/lib/jsquash';
 
 interface ConversionResult {
   blob: Blob;
@@ -28,7 +27,7 @@ const canvasToWebpViaWasm = async (
   quality: number // 0-100 scale
 ): Promise<Blob> => {
   const imageData = getImageData(canvas);
-  const webpBuffer = await encodeWebp(imageData, { quality });
+  const webpBuffer = await encodeWebpWasm(imageData, quality);
   return new Blob([webpBuffer], { type: 'image/webp' });
 };
 
@@ -36,7 +35,7 @@ const canvasToWebpViaWasm = async (
 const optimisePngBuffer = async (pngBuffer: ArrayBuffer): Promise<ArrayBuffer> => {
   try {
     // Level 2 is a good balance between speed and compression
-    return await optimisePng(pngBuffer, { level: 2 });
+    return await optimisePngWasm(pngBuffer, 2);
   } catch (e) {
     console.warn('[ImageConverter] OxiPNG optimization failed, using original:', e);
     return pngBuffer;
