@@ -1,6 +1,6 @@
-import { useCallback } from 'react';
-import { QualitySettings, CropArea, displayedToInternalQuality, getOutputMimeType, ImageOutputFormat } from '@/types/converter';
-import { encodeWebpWasm, optimisePngWasm } from '@/lib/jsquash';
+import { useCallback } from "react";
+import { QualitySettings, CropArea, getOutputMimeType, ImageOutputFormat } from "@/types/converter";
+import { encodeWebpWasm, optimisePngWasm } from "@/lib/jsquash";
 
 interface ConversionResult {
   blob: Blob;
@@ -16,28 +16,27 @@ interface ConversionOptions {
 
 // Get ImageData from canvas
 const getImageData = (canvas: HTMLCanvasElement): ImageData => {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Failed to get canvas context');
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get canvas context");
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 };
 
-// Convert canvas to WebP using @jsquash/webp (WASM-based, works everywhere including Safari)
+// Convert canvas to WebP using @jsquash/webp (WASM-based, consistent across browsers)
 const canvasToWebpViaWasm = async (
   canvas: HTMLCanvasElement,
-  quality: number // 0-100 scale
+  quality: number, // 0-100 scale
 ): Promise<Blob> => {
   const imageData = getImageData(canvas);
   const webpBuffer = await encodeWebpWasm(imageData, quality);
-  return new Blob([webpBuffer], { type: 'image/webp' });
+  return new Blob([webpBuffer], { type: "image/webp" });
 };
 
 // Optimise PNG using OxiPNG WASM (lossless optimization)
-const optimisePngBuffer = async (pngBuffer: ArrayBuffer): Promise<ArrayBuffer> => {
+const optimisePngBuffer = async (pngBuffer: ArrayBuffer, level: number = 2): Promise<ArrayBuffer> => {
   try {
-    // Level 2 is a good balance between speed and compression
-    return await optimisePngWasm(pngBuffer, 2);
+    return await optimisePngWasm(pngBuffer, level);
   } catch (e) {
-    console.warn('[ImageConverter] OxiPNG optimization failed, using original:', e);
+    console.warn("[ImageConverter] OxiPNG optimization failed, using original:", e);
     return pngBuffer;
   }
 };
@@ -45,112 +44,110 @@ const optimisePngBuffer = async (pngBuffer: ArrayBuffer): Promise<ArrayBuffer> =
 // Convert canvas to PNG ArrayBuffer
 const canvasToPngBuffer = (canvas: HTMLCanvasElement): Promise<ArrayBuffer> => {
   return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      async (blob) => {
-        if (blob) {
-          resolve(await blob.arrayBuffer());
-        } else {
-          reject(new Error('Failed to create PNG blob'));
-        }
-      },
-      'image/png'
-    );
+    canvas.toBlob(async (blob) => {
+      if (blob) {
+        resolve(await blob.arrayBuffer());
+      } else {
+        reject(new Error("Failed to create PNG blob"));
+      }
+    }, "image/png");
   });
 };
 
-// Quality mapping for JPEG: more aggressive compression at low percentages
-// 50% displayed -> 0.15 quality (very compressed, ~20-30% of original)
-// 100% displayed -> 0.70 quality (good balance, ~80-100% of original)  
-// 200% displayed -> 0.95 quality (near-lossless, can be larger than original)
-const displayedToJpegQuality = (displayed: number): number => {
-  // Use a curve that's more aggressive at low values
-  // 50 -> 0.15, 100 -> 0.70, 200 -> 0.95
-  if (displayed <= 100) {
-    // 50-100: map to 0.15-0.70 (linear)
-    return 0.15 + ((displayed - 50) / 50) * 0.55;
-  } else {
-    // 100-200: map to 0.70-0.95 (linear)
-    return 0.70 + ((displayed - 100) / 100) * 0.25;
-  }
-};
-
-// Quality mapping for WebP: similar to JPEG but slightly better compression
-// 50% displayed -> 0.10 quality
-// 100% displayed -> 0.65 quality
-// 200% displayed -> 0.92 quality
+/**
+ * WebP quality mapping (for jsquash WASM, 0-100 scale):
+ * - 50% displayed → quality 20 (aggressive compression, ~20-30% of original)
+ * - 100% displayed → quality 75 (good balance, ~70-100% of original)
+ * - 200% displayed → quality 100 (lossless mode)
+ */
 const displayedToWebpQuality = (displayed: number): number => {
   if (displayed <= 100) {
-    return 0.10 + ((displayed - 50) / 50) * 0.55;
+    // 50→20, 100→75 (steeper curve for more compression at low end)
+    return Math.round(20 + ((displayed - 50) / 50) * 55);
   } else {
-    return 0.65 + ((displayed - 100) / 100) * 0.27;
+    // 100→75, 200→100
+    return Math.round(75 + ((displayed - 100) / 100) * 25);
   }
 };
 
-// Convert canvas to blob with format-specific quality handling
-const canvasToBlobWithQuality = async (
+/**
+ * JPEG quality mapping (for canvas.toBlob, 0-1 scale):
+ * - 50% displayed → quality 0.30 (aggressive compression)
+ * - 100% displayed → quality 0.82 (good quality, ~original size)
+ * - 200% displayed → quality 0.98 (near-maximum)
+ */
+const displayedToJpegQuality = (displayed: number): number => {
+  if (displayed <= 100) {
+    // 50→0.30, 100→0.82
+    return 0.3 + ((displayed - 50) / 50) * 0.52;
+  } else {
+    // 100→0.82, 200→0.98
+    return 0.82 + ((displayed - 100) / 100) * 0.16;
+  }
+};
+
+/**
+ * PNG scale mapping (PNG is lossless, so we control file size via dimensions):
+ * - 50% displayed → 0.5 scale (25% pixels = ~25% file size)
+ * - 100% displayed → 1.0 scale (original)
+ * - 200% displayed → 2.0 scale (400% pixels = ~400% file size)
+ */
+const displayedToPngScale = (displayed: number): number => {
+  return displayed / 100;
+};
+
+// Scale canvas by a factor and return new canvas
+const scaleCanvas = (sourceCanvas: HTMLCanvasElement, scaleFactor: number): HTMLCanvasElement => {
+  const newCanvas = document.createElement("canvas");
+  newCanvas.width = Math.max(1, Math.round(sourceCanvas.width * scaleFactor));
+  newCanvas.height = Math.max(1, Math.round(sourceCanvas.height * scaleFactor));
+
+  const ctx = newCanvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to create canvas context");
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(sourceCanvas, 0, 0, newCanvas.width, newCanvas.height);
+
+  return newCanvas;
+};
+
+// Convert canvas to blob with format-specific handling
+const canvasToBlobWithFormat = async (
   canvas: HTMLCanvasElement,
   targetFormat: ImageOutputFormat,
-  quality: number | undefined
+  quality?: number, // 0-1 for JPEG, 0-100 for WebP WASM
+  oxipngLevel: number = 2,
 ): Promise<Blob> => {
-  const mimeType = getOutputMimeType('image', targetFormat);
-  
-  // WebP: try native first, then WASM fallback
-  if (targetFormat === 'webp') {
-    const nativeBlob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob((blob) => resolve(blob), 'image/webp', quality);
-    });
-    
-    // Check if we actually got WebP (Safari often returns PNG instead)
-    if (nativeBlob && nativeBlob.type === 'image/webp') {
-      return nativeBlob;
-    }
-    
-    // Fallback to WASM encoder for Safari
-    console.log('[ImageConverter] Native WebP failed, using WASM encoder');
-    const wasmQuality = quality !== undefined ? Math.round(quality * 100) : 75;
+  // WebP: Always use WASM for consistency across browsers
+  if (targetFormat === "webp") {
+    const wasmQuality = quality !== undefined ? Math.round(quality) : 75;
+    console.log("[ImageConverter] WebP WASM encoding with quality:", wasmQuality);
     return await canvasToWebpViaWasm(canvas, wasmQuality);
   }
-  
-  // PNG: Use canvas.toBlob then optimize with OxiPNG
-  if (targetFormat === 'png') {
+
+  // PNG: Use canvas then optimize with OxiPNG
+  if (targetFormat === "png") {
     const pngBuffer = await canvasToPngBuffer(canvas);
-    const optimizedBuffer = await optimisePngBuffer(pngBuffer);
-    return new Blob([optimizedBuffer], { type: 'image/png' });
+    const optimizedBuffer = await optimisePngBuffer(pngBuffer, oxipngLevel);
+    return new Blob([optimizedBuffer], { type: "image/png" });
   }
-  
-  // Standard path for JPEG and other formats
+
+  // JPEG and other formats: Use canvas.toBlob
+  const mimeType = getOutputMimeType("image", targetFormat);
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
         if (blob) {
           resolve(blob);
         } else {
-          reject(new Error('Failed to create blob'));
+          reject(new Error("Failed to create blob"));
         }
       },
       mimeType,
-      quality
+      quality, // 0-1 for canvas.toBlob
     );
   });
-};
-
-// Scale canvas down by a factor and return new canvas
-const scaleCanvas = (
-  sourceCanvas: HTMLCanvasElement, 
-  scaleFactor: number
-): HTMLCanvasElement => {
-  const newCanvas = document.createElement('canvas');
-  newCanvas.width = Math.max(1, Math.round(sourceCanvas.width * scaleFactor));
-  newCanvas.height = Math.max(1, Math.round(sourceCanvas.height * scaleFactor));
-  
-  const ctx = newCanvas.getContext('2d');
-  if (!ctx) throw new Error('Failed to create canvas context');
-  
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(sourceCanvas, 0, 0, newCanvas.width, newCanvas.height);
-  
-  return newCanvas;
 };
 
 export const useImageConverter = () => {
@@ -158,7 +155,7 @@ export const useImageConverter = () => {
     async (
       file: File,
       onProgress: (progress: number) => void,
-      options: ConversionOptions
+      options: ConversionOptions,
     ): Promise<ConversionResult> => {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -169,13 +166,13 @@ export const useImageConverter = () => {
           img.src = e.target?.result as string;
         };
 
-        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.onerror = () => reject(new Error("Failed to read file"));
 
         img.onload = async () => {
           onProgress(40);
 
           const { qualitySettings, cropArea, dimensions, addWhiteBackground } = options;
-          const outputFormat = (qualitySettings.outputFormat as ImageOutputFormat) || 'webp';
+          const outputFormat = (qualitySettings.outputFormat as ImageOutputFormat) || "webp";
 
           // Calculate source dimensions (for cropping)
           const sx = cropArea?.x ?? 0;
@@ -183,7 +180,7 @@ export const useImageConverter = () => {
           const sWidth = cropArea?.width ?? img.width;
           const sHeight = cropArea?.height ?? img.height;
 
-          // Calculate final dimensions with scale
+          // Calculate base target dimensions
           let targetWidth = cropArea ? cropArea.width : img.width;
           let targetHeight = cropArea ? cropArea.height : img.height;
 
@@ -192,27 +189,28 @@ export const useImageConverter = () => {
             targetHeight = dimensions.height;
           }
 
-          // Apply scale factor
-          const scale = qualitySettings.scale / 100;
-          targetWidth = Math.round(targetWidth * scale);
-          targetHeight = Math.round(targetHeight * scale);
+          // Apply user scale setting (separate from quality-based scaling)
+          const userScale = qualitySettings.scale / 100;
+          targetWidth = Math.round(targetWidth * userScale);
+          targetHeight = Math.round(targetHeight * userScale);
 
-          const canvas = document.createElement('canvas');
+          // Create base canvas at target dimensions
+          const canvas = document.createElement("canvas");
           canvas.width = targetWidth;
           canvas.height = targetHeight;
 
-          const ctx = canvas.getContext('2d');
+          const ctx = canvas.getContext("2d");
           if (!ctx) {
-            reject(new Error('Failed to create canvas context'));
+            reject(new Error("Failed to create canvas context"));
             return;
           }
 
           ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
+          ctx.imageSmoothingQuality = "high";
 
-          // Add white background if needed
+          // Add white background if needed (for transparent images going to JPEG)
           if (addWhiteBackground) {
-            ctx.fillStyle = '#FFFFFF';
+            ctx.fillStyle = "#FFFFFF";
             ctx.fillRect(0, 0, targetWidth, targetHeight);
           }
 
@@ -222,160 +220,69 @@ export const useImageConverter = () => {
           try {
             let blob: Blob;
 
-            if (qualitySettings.mode === 'percentage') {
-              // Percentage mode: use format-specific quality mapping
-              let quality: number | undefined;
-              
-              if (outputFormat === 'png') {
-                // PNG is lossless, quality doesn't apply
-                // But we can scale down to simulate "quality reduction"
-                const displayedPct = qualitySettings.percentage;
-                
-                if (displayedPct < 100) {
-                  // Scale down proportionally: 50% = 50% of dimensions
-                  const scaleFactor = displayedPct / 100;
-                  const scaledCanvas = scaleCanvas(canvas, scaleFactor);
-                  blob = await canvasToBlobWithQuality(scaledCanvas, outputFormat, undefined);
-                } else {
-                  // 100%+ = full size
-                  blob = await canvasToBlobWithQuality(canvas, outputFormat, undefined);
-                }
-              } else if (outputFormat === 'jpeg') {
-                quality = displayedToJpegQuality(qualitySettings.percentage);
-                console.log('[ImageConverter] JPEG quality:', qualitySettings.percentage, '% ->', quality);
-                blob = await canvasToBlobWithQuality(canvas, outputFormat, quality);
-              } else if (outputFormat === 'webp') {
-                quality = displayedToWebpQuality(qualitySettings.percentage);
-                console.log('[ImageConverter] WebP quality:', qualitySettings.percentage, '% ->', quality);
-                blob = await canvasToBlobWithQuality(canvas, outputFormat, quality);
+            if (qualitySettings.mode === "percentage") {
+              const displayedPct = qualitySettings.percentage;
+
+              if (outputFormat === "png") {
+                // PNG: Control size via dimensions (lossless format)
+                const pngScale = displayedToPngScale(displayedPct);
+                const scaledCanvas = pngScale !== 1.0 ? scaleCanvas(canvas, pngScale) : canvas;
+
+                console.log(
+                  "[ImageConverter] PNG scale:",
+                  displayedPct,
+                  "% ->",
+                  pngScale,
+                  `(${scaledCanvas.width}x${scaledCanvas.height})`,
+                );
+
+                blob = await canvasToBlobWithFormat(scaledCanvas, "png", undefined, 2);
+              } else if (outputFormat === "webp") {
+                // WebP: Use WASM with 0-100 quality scale
+                const webpQuality = displayedToWebpQuality(displayedPct);
+                console.log("[ImageConverter] WebP quality:", displayedPct, "% ->", webpQuality);
+                blob = await canvasToBlobWithFormat(canvas, "webp", webpQuality);
+              } else if (outputFormat === "jpeg") {
+                // JPEG: Use canvas.toBlob with 0-1 quality scale
+                const jpegQuality = displayedToJpegQuality(displayedPct);
+                console.log("[ImageConverter] JPEG quality:", displayedPct, "% ->", jpegQuality.toFixed(2));
+                blob = await canvasToBlobWithFormat(canvas, "jpeg", jpegQuality);
+              } else if (outputFormat === "avif") {
+                // AVIF: Similar to WebP (if browser supports)
+                const avifQuality = displayedToWebpQuality(displayedPct) / 100;
+                blob = await canvasToBlobWithFormat(canvas, "avif", avifQuality);
               } else {
-                // AVIF, GIF, BMP - use generic mapping
-                quality = displayedToInternalQuality(qualitySettings.percentage);
-                blob = await canvasToBlobWithQuality(canvas, outputFormat, quality);
+                // GIF, BMP: No quality control, just encode
+                blob = await canvasToBlobWithFormat(canvas, outputFormat);
               }
-              
-              console.log('[ImageConverter] Result:', {
+
+              console.log("[ImageConverter] Result:", {
                 format: outputFormat,
-                size: blob.size,
-                type: blob.type
+                inputSize: file.size,
+                outputSize: blob.size,
+                ratio: ((blob.size / file.size) * 100).toFixed(1) + "%",
               });
-              
+
               onProgress(100);
               const url = URL.createObjectURL(blob);
               resolve({ blob, url });
-              
             } else {
-              // MaxSize mode: binary search to find quality that fits
+              // MaxSize mode: Binary search to fit target size
               const targetBytes = qualitySettings.maxSizeKB * 1024;
-              
-              if (outputFormat === 'png') {
-                // PNG: scale down iteratively until under target
-                let currentCanvas = canvas;
-                let scaleFactor = 1.0;
-                let bestBlob: Blob | null = null;
-                let iterations = 0;
-                const maxIterations = 10;
-                
-                while (iterations < maxIterations) {
-                  const pngBuffer = await canvasToPngBuffer(currentCanvas);
-                  const optimizedBuffer = await optimisePngBuffer(pngBuffer);
-                  const testBlob = new Blob([optimizedBuffer], { type: 'image/png' });
-                  
-                  console.log('[ImageConverter] PNG MaxSize iteration:', {
-                    iteration: iterations,
-                    scaleFactor,
-                    size: testBlob.size,
-                    target: targetBytes
-                  });
-                  
-                  if (testBlob.size <= targetBytes) {
-                    bestBlob = testBlob;
-                    break;
-                  }
-                  
-                  // Calculate new scale factor based on size ratio
-                  // Be more aggressive: aim for 80% of target
-                  const sizeRatio = (targetBytes * 0.8) / testBlob.size;
-                  // For PNG, size scales roughly with pixel count (width * height)
-                  // So we need sqrt of the ratio for dimension scale
-                  const dimensionRatio = Math.sqrt(sizeRatio);
-                  scaleFactor *= dimensionRatio;
-                  
-                  // Minimum scale to prevent infinite loop
-                  if (scaleFactor < 0.1) {
-                    console.warn('[ImageConverter] PNG cannot reach target size, using smallest');
-                    bestBlob = testBlob;
-                    break;
-                  }
-                  
-                  currentCanvas = scaleCanvas(canvas, scaleFactor);
-                  iterations++;
-                }
-                
-                if (!bestBlob) {
-                  bestBlob = await canvasToBlobWithQuality(canvas, outputFormat, undefined);
-                }
-                
-                blob = bestBlob;
+
+              if (outputFormat === "png") {
+                // PNG: Scale down iteratively (quality doesn't help)
+                blob = await compressPngToMaxSize(canvas, targetBytes, onProgress);
               } else {
-                // JPEG/WebP: binary search on quality
-                let minQ = 0.01;
-                let maxQ = 0.95;
-                let bestBlob: Blob | null = null;
-                let iterations = 0;
-                const maxIterations = 10;
-
-                while (iterations < maxIterations && (maxQ - minQ) > 0.02) {
-                  const midQ = (minQ + maxQ) / 2;
-                  
-                  let testBlob: Blob;
-                  if (outputFormat === 'webp') {
-                    // Use WASM for consistent results
-                    testBlob = await canvasToWebpViaWasm(canvas, Math.round(midQ * 100));
-                  } else {
-                    testBlob = await canvasToBlobWithQuality(canvas, outputFormat, midQ);
-                  }
-                  
-                  console.log('[ImageConverter] MaxSize binary search:', {
-                    iteration: iterations,
-                    quality: midQ,
-                    size: testBlob.size,
-                    target: targetBytes
-                  });
-
-                  if (testBlob.size <= targetBytes) {
-                    bestBlob = testBlob;
-                    minQ = midQ; // Try higher quality
-                  } else {
-                    maxQ = midQ; // Need lower quality
-                  }
-
-                  iterations++;
-                  onProgress(70 + (iterations / maxIterations) * 25);
-                }
-
-                // Final check: if best is still over, try minimum quality
-                if (!bestBlob || bestBlob.size > targetBytes) {
-                  let finalBlob: Blob;
-                  if (outputFormat === 'webp') {
-                    finalBlob = await canvasToWebpViaWasm(canvas, 1);
-                  } else {
-                    finalBlob = await canvasToBlobWithQuality(canvas, outputFormat, 0.01);
-                  }
-                  
-                  if (finalBlob.size <= targetBytes || !bestBlob) {
-                    bestBlob = finalBlob;
-                  }
-                }
-
-                blob = bestBlob!;
+                // Lossy formats: Binary search on quality, then scale if needed
+                blob = await compressLossyToMaxSize(canvas, outputFormat, targetBytes, onProgress);
               }
-              
-              console.log('[ImageConverter] MaxSize result:', {
+
+              console.log("[ImageConverter] MaxSize result:", {
                 format: outputFormat,
-                size: blob.size,
-                target: targetBytes,
-                underLimit: blob.size <= targetBytes
+                targetKB: qualitySettings.maxSizeKB,
+                actualKB: Math.round(blob.size / 1024),
+                success: blob.size <= targetBytes,
               });
 
               onProgress(100);
@@ -387,15 +294,150 @@ export const useImageConverter = () => {
           }
         };
 
-        img.onerror = () => reject(new Error('Failed to load image'));
+        img.onerror = () => reject(new Error("Failed to load image"));
         reader.readAsDataURL(file);
       });
     },
-    []
+    [],
   );
 
-  // Backwards compatibility alias
   const convertToWebP = convertImage;
 
   return { convertImage, convertToWebP };
 };
+
+/**
+ * Compress PNG to max size by scaling down iteratively
+ */
+async function compressPngToMaxSize(
+  canvas: HTMLCanvasElement,
+  targetBytes: number,
+  onProgress: (p: number) => void,
+): Promise<Blob> {
+  let currentCanvas = canvas;
+  let scaleFactor = 1.0;
+  let bestBlob: Blob | null = null;
+
+  const maxIterations = 12;
+
+  for (let i = 0; i < maxIterations; i++) {
+    // Use higher OxiPNG level for maxSize mode
+    const pngBuffer = await canvasToPngBuffer(currentCanvas);
+    const optimizedBuffer = await optimisePngBuffer(pngBuffer, 4);
+    const testBlob = new Blob([optimizedBuffer], { type: "image/png" });
+
+    console.log("[ImageConverter] PNG MaxSize iteration:", {
+      iteration: i,
+      scaleFactor: scaleFactor.toFixed(3),
+      dimensions: `${currentCanvas.width}x${currentCanvas.height}`,
+      size: testBlob.size,
+      target: targetBytes,
+    });
+
+    if (testBlob.size <= targetBytes) {
+      bestBlob = testBlob;
+      break;
+    }
+
+    // Store as fallback (best we could do)
+    if (!bestBlob || testBlob.size < bestBlob.size) {
+      bestBlob = testBlob;
+    }
+
+    // Calculate new scale: PNG size ≈ proportional to pixel count
+    // Target 70% of limit to leave headroom
+    const sizeRatio = (targetBytes * 0.7) / testBlob.size;
+    const dimensionRatio = Math.sqrt(sizeRatio);
+    scaleFactor *= dimensionRatio;
+
+    if (scaleFactor < 0.05) {
+      console.warn("[ImageConverter] PNG cannot reach target size at minimum scale");
+      break;
+    }
+
+    currentCanvas = scaleCanvas(canvas, scaleFactor);
+    onProgress(70 + (i / maxIterations) * 25);
+  }
+
+  return bestBlob || (await canvasToBlobWithFormat(canvas, "png"));
+}
+
+/**
+ * Compress lossy format (WebP/JPEG) to max size via binary search
+ */
+async function compressLossyToMaxSize(
+  canvas: HTMLCanvasElement,
+  format: ImageOutputFormat,
+  targetBytes: number,
+  onProgress: (p: number) => void,
+): Promise<Blob> {
+  const isWebp = format === "webp";
+
+  // Quality ranges (WebP: 0-100, JPEG: 0-1)
+  let minQ = isWebp ? 1 : 0.05;
+  let maxQ = isWebp ? 100 : 0.98;
+  let bestBlob: Blob | null = null;
+  let bestQuality = minQ;
+
+  const maxIterations = 12;
+
+  for (let i = 0; i < maxIterations; i++) {
+    const midQ = (minQ + maxQ) / 2;
+
+    const testBlob = await canvasToBlobWithFormat(canvas, format, midQ);
+
+    console.log("[ImageConverter] MaxSize binary search:", {
+      iteration: i,
+      quality: isWebp ? midQ : midQ.toFixed(2),
+      size: testBlob.size,
+      target: targetBytes,
+    });
+
+    if (testBlob.size <= targetBytes) {
+      bestBlob = testBlob;
+      bestQuality = midQ;
+      minQ = midQ; // Try higher quality
+    } else {
+      maxQ = midQ; // Need lower quality
+    }
+
+    // Converged
+    if ((isWebp && maxQ - minQ < 2) || (!isWebp && maxQ - minQ < 0.02)) {
+      break;
+    }
+
+    onProgress(70 + (i / maxIterations) * 20);
+  }
+
+  // If still over target, try minimum quality
+  if (!bestBlob || bestBlob.size > targetBytes) {
+    const minBlob = await canvasToBlobWithFormat(canvas, format, minQ);
+    if (minBlob.size <= targetBytes || !bestBlob) {
+      bestBlob = minBlob;
+    }
+  }
+
+  // Last resort: scale down if quality alone can't achieve target
+  if (bestBlob && bestBlob.size > targetBytes) {
+    console.log("[ImageConverter] Quality alone insufficient, scaling down...");
+    let scaleFactor = 0.9;
+
+    for (let i = 0; i < 5 && bestBlob.size > targetBytes; i++) {
+      const scaledCanvas = scaleCanvas(canvas, scaleFactor);
+      bestBlob = await canvasToBlobWithFormat(scaledCanvas, format, isWebp ? 50 : 0.5);
+
+      console.log("[ImageConverter] Scale iteration:", {
+        scale: scaleFactor.toFixed(2),
+        size: bestBlob.size,
+      });
+
+      scaleFactor *= 0.8;
+      onProgress(90 + i * 2);
+    }
+  }
+
+  return bestBlob!;
+}
+
+// Re-export scaleCanvas for use in compressLossyToMaxSize
+const canvasToBlobWithFormat_external = canvasToBlobWithFormat;
