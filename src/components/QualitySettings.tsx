@@ -314,9 +314,9 @@ export const QualitySettings = ({
               <p className="text-xs text-muted-foreground">
                 100% = Standard • 200% = Maximum
               </p>
-              {estimatedSize && (
+              {estimatedSize && originalSize && (
                 <p className="text-xs text-primary font-medium">
-                  Geschätzte Größe: ~{formatFileSize(estimatedSize)}
+                  Geschätzte Größe: ~{formatFileSize(estimatedSize)} ({Math.round((estimatedSize / originalSize) * 100)}% der Originalgröße)
                 </p>
               )}
             </TabsContent>
