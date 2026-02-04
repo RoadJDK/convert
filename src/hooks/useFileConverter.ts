@@ -1,39 +1,18 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ConvertibleFile, getFileType, getOutputExtension, QualitySettings, CropArea, TrimRange, DEFAULT_QUALITY_SETTINGS, DEFAULT_VIDEO_QUALITY_SETTINGS, ImageOutputFormat } from '@/types/converter';
 import { useImageConverter } from './useImageConverter';
 import { useVideoConverter } from './useVideoConverter';
 import { useStatsTracker } from './useStatsTracker';
+import { useRateLimiter } from './useRateLimiter';
 import { removeBackground, Config } from '@imgly/background-removal';
-import { toast } from 'sonner';
-
-// Rate limiting: 30 conversions per minute
-const RATE_LIMIT_CONVERSIONS_PER_MINUTE = 30;
 
 export const useFileConverter = () => {
   const [files, setFiles] = useState<ConvertibleFile[]>([]);
   const [videoPreviews, setVideoPreviews] = useState<Record<string, string>>({});
-  const conversionTimestamps = useRef<number[]>([]);
   const { convertImage, convertToWebP } = useImageConverter();
   const { convertToWebM, extractFrame } = useVideoConverter();
   const { trackConversion } = useStatsTracker();
-
-  const checkRateLimit = useCallback((): boolean => {
-    const now = Date.now();
-    const oneMinuteAgo = now - 60000;
-    
-    // Clean old timestamps
-    conversionTimestamps.current = conversionTimestamps.current.filter(t => t > oneMinuteAgo);
-    
-    if (conversionTimestamps.current.length >= RATE_LIMIT_CONVERSIONS_PER_MINUTE) {
-      const oldestTimestamp = conversionTimestamps.current[0];
-      const waitTime = Math.ceil((oldestTimestamp + 60000 - now) / 1000);
-      toast.error(`Rate limit erreicht. Bitte warte ${waitTime} Sekunden.`);
-      return false;
-    }
-    
-    conversionTimestamps.current.push(now);
-    return true;
-  }, []);
+  const { recordUsage } = useRateLimiter();
 
   // Extract video previews
   useEffect(() => {
@@ -142,8 +121,8 @@ export const useFileConverter = () => {
 
   const convertFile = useCallback(
     async (fileItem: ConvertibleFile) => {
-      // Check rate limit before starting conversion
-      if (!checkRateLimit()) {
+      // Check rate limit before starting conversion (100 conversions per hour)
+      if (!recordUsage('conversions')) {
         updateFile(fileItem.id, { status: 'error', error: 'Rate limit erreicht. Bitte warte etwas.' });
         return;
       }
@@ -227,7 +206,7 @@ export const useFileConverter = () => {
         });
       }
     },
-    [convertImage, convertToWebM, updateFile, trackConversion, checkRateLimit]
+    [convertImage, convertToWebM, updateFile, trackConversion, recordUsage]
   );
 
   const removeFile = useCallback((id: string) => {
