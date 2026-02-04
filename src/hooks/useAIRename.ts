@@ -2,10 +2,12 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useStatsTracker } from './useStatsTracker';
+import { useRateLimiter } from './useRateLimiter';
 
 export const useAIRename = () => {
   const [isLoading, setIsLoading] = useState<Record<string, boolean>>({});
   const { trackAIRename } = useStatsTracker();
+  const { recordUsage } = useRateLimiter();
 
   const fileToBase64 = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -20,13 +22,18 @@ export const useAIRename = () => {
   };
 
   const generateName = useCallback(async (
-    fileId: string, 
-    fileName: string, 
+    fileId: string,
+    fileName: string,
     fileType: 'image' | 'video',
     file?: File
   ): Promise<string | null> => {
+    // Check rate limit before making API call (150 renames per hour)
+    if (!recordUsage('renames')) {
+      return null;
+    }
+
     setIsLoading(prev => ({ ...prev, [fileId]: true }));
-    
+
     try {
       let imageData: string | undefined;
       
@@ -65,7 +72,7 @@ export const useAIRename = () => {
     } finally {
       setIsLoading(prev => ({ ...prev, [fileId]: false }));
     }
-  }, []);
+  }, [recordUsage, trackAIRename]);
 
   return { generateName, isLoading };
 };

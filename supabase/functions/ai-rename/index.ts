@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const ALLOWED_ORIGINS = [
@@ -13,7 +12,7 @@ const getCorsHeaders = (origin: string | null) => {
   const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-forwarded-for, x-real-ip",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 };
@@ -28,42 +27,80 @@ const RequestSchema = z.object({
   ),
 });
 
-// Rate limiting configuration
-const RATE_LIMIT_RENAMES_PER_MINUTE = 100;
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+// Rate limiting configuration: 150 renames per hour per IP
+const RATE_LIMIT_RENAMES_PER_HOUR = 150;
+const ONE_HOUR_MS = 60 * 60 * 1000;
+const rateLimitMap = new Map<string, { timestamps: number[] }>();
 
-function checkRateLimit(userId: string): { allowed: boolean; remaining: number; resetIn: number } {
-  const now = Date.now();
-  const windowMs = 60 * 1000; // 1 minute window
-  
-  let userLimit = rateLimitMap.get(userId);
-  
-  // Reset if window expired
-  if (!userLimit || now > userLimit.resetTime) {
-    userLimit = { count: 0, resetTime: now + windowMs };
-    rateLimitMap.set(userId, userLimit);
+function getClientIP(req: Request): string {
+  // Try various headers that might contain the real client IP
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    // x-forwarded-for can contain multiple IPs, take the first one
+    return forwardedFor.split(",")[0].trim();
   }
-  
-  const remaining = RATE_LIMIT_RENAMES_PER_MINUTE - userLimit.count;
-  const resetIn = Math.ceil((userLimit.resetTime - now) / 1000);
-  
-  if (userLimit.count >= RATE_LIMIT_RENAMES_PER_MINUTE) {
+
+  const realIP = req.headers.get("x-real-ip");
+  if (realIP) {
+    return realIP.trim();
+  }
+
+  const cfConnectingIP = req.headers.get("cf-connecting-ip");
+  if (cfConnectingIP) {
+    return cfConnectingIP.trim();
+  }
+
+  // Fallback to a generic identifier if no IP headers are available
+  return "unknown-client";
+}
+
+function checkRateLimit(clientIP: string): { allowed: boolean; remaining: number; resetIn: number } {
+  const now = Date.now();
+  const oneHourAgo = now - ONE_HOUR_MS;
+
+  let clientData = rateLimitMap.get(clientIP);
+
+  if (!clientData) {
+    clientData = { timestamps: [] };
+    rateLimitMap.set(clientIP, clientData);
+  }
+
+  // Clean old timestamps (older than 1 hour)
+  clientData.timestamps = clientData.timestamps.filter(t => t > oneHourAgo);
+
+  const remaining = RATE_LIMIT_RENAMES_PER_HOUR - clientData.timestamps.length;
+
+  // Calculate when the oldest request will expire
+  let resetIn = 0;
+  if (clientData.timestamps.length > 0) {
+    const oldestTimestamp = Math.min(...clientData.timestamps);
+    resetIn = Math.ceil(((oldestTimestamp + ONE_HOUR_MS) - now) / 1000);
+    resetIn = Math.max(0, resetIn);
+  }
+
+  if (clientData.timestamps.length >= RATE_LIMIT_RENAMES_PER_HOUR) {
     return { allowed: false, remaining: 0, resetIn };
   }
-  
-  userLimit.count++;
+
+  // Record this request
+  clientData.timestamps.push(now);
   return { allowed: true, remaining: remaining - 1, resetIn };
 }
 
-// Clean up old rate limit entries periodically
+// Clean up old rate limit entries periodically (every 10 minutes)
 setInterval(() => {
   const now = Date.now();
+  const oneHourAgo = now - ONE_HOUR_MS;
+
   for (const [key, value] of rateLimitMap.entries()) {
-    if (now > value.resetTime) {
+    // Filter out old timestamps
+    value.timestamps = value.timestamps.filter(t => t > oneHourAgo);
+    // Remove entry if no recent timestamps
+    if (value.timestamps.length === 0) {
       rateLimitMap.delete(key);
     }
   }
-}, 60000); // Clean every minute
+}, 10 * 60 * 1000); // Clean every 10 minutes
 
 serve(async (req) => {
   const origin = req.headers.get("origin");
@@ -82,49 +119,27 @@ serve(async (req) => {
   }
 
   try {
-    // Verify authentication
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized - no auth header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // Get client IP for rate limiting
+    const clientIP = getClientIP(req);
 
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
-    
-    if (claimsError || !claimsData?.claims) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized - invalid token" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const userId = claimsData.claims.sub as string;
-
-    // Check rate limit for AI renames (100/min)
-    const renameLimit = checkRateLimit(`rename:${userId}`);
+    // Check rate limit (150 renames per hour per IP)
+    const renameLimit = checkRateLimit(clientIP);
     if (!renameLimit.allowed) {
+      const waitMinutes = Math.ceil(renameLimit.resetIn / 60);
       return new Response(
-        JSON.stringify({ 
-          error: `Rate limit überschritten. Bitte warte ${renameLimit.resetIn} Sekunden.`,
+        JSON.stringify({
+          error: `Rate limit überschritten. Bitte warte ${waitMinutes} Minute${waitMinutes > 1 ? 'n' : ''}.`,
           resetIn: renameLimit.resetIn
         }),
-        { 
-          status: 429, 
-          headers: { 
-            ...corsHeaders, 
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
             "Content-Type": "application/json",
             "X-RateLimit-Remaining": "0",
-            "X-RateLimit-Reset": String(renameLimit.resetIn)
-          } 
+            "X-RateLimit-Reset": String(renameLimit.resetIn),
+            "X-RateLimit-Limit": String(RATE_LIMIT_RENAMES_PER_HOUR)
+          }
         }
       );
     }
@@ -149,13 +164,13 @@ serve(async (req) => {
     }
 
     const { fileName, fileType, imageData } = validationResult.data;
-    
+
     // Sanitize fileName before using in prompt to prevent prompt injection
     const sanitizedFileName = fileName
       .trim()
       .slice(0, 100)
       .replace(/[^\w\s.\-()]/g, "");
-    
+
     const GROQ_API_KEY = Deno.env.get("CROQ_CLOUD_KEY");
     if (!GROQ_API_KEY) {
       throw new Error("CROQ_CLOUD_KEY is not configured");
@@ -191,7 +206,7 @@ Reply ONLY with the new filename, nothing else.`
 
     // Groq vision model for image analysis
     let model = "llama-3.3-70b-versatile"; // Default text model
-    
+
     if (imageData && fileType === 'image') {
       // Use Groq's vision model with image
       model = "meta-llama/llama-4-scout-17b-16e-instruct";
@@ -252,7 +267,7 @@ Reply ONLY with the new filename, nothing else.`
 
     const data = await response.json();
     let suggestedName = data.choices?.[0]?.message?.content?.trim() || sanitizedFileName;
-    
+
     // Clean up the suggested name
     suggestedName = suggestedName
       .toLowerCase()
@@ -262,10 +277,11 @@ Reply ONLY with the new filename, nothing else.`
       .slice(0, 30);
 
     return new Response(JSON.stringify({ suggestedName }), {
-      headers: { 
-        ...corsHeaders, 
+      headers: {
+        ...corsHeaders,
         "Content-Type": "application/json",
         "X-RateLimit-Remaining": String(renameLimit.remaining),
+        "X-RateLimit-Limit": String(RATE_LIMIT_RENAMES_PER_HOUR)
       },
     });
   } catch (error) {
