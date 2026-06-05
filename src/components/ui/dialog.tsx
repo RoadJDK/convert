@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { CloseSelectionIcon as X } from "@/components/icons/MediaConvertIcons";
 
 import { cn } from "@/lib/utils";
 

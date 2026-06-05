@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Image, Film, X } from 'lucide-react';
 import { ConvertibleFile, FileType } from '@/types/converter';
+import { CloseSelectionIcon, ImageFormatIcon, VideoTimelineIcon } from '@/components/icons/MediaConvertIcons';
 
 interface SelectAllControlsProps {
   pendingFiles: ConvertibleFile[];
@@ -43,17 +43,17 @@ export const SelectAllControls = ({
   }, [pendingFiles, selectedPendingIds]);
 
   return (
-    <div className="flex items-center gap-2 px-1">
-      <span className="text-sm text-muted-foreground mr-1">Alle auswählen:</span>
+    <div className="glass-panel flex flex-wrap items-center gap-2 rounded-xl px-3 py-2">
+      <span className="mr-1 text-sm text-muted-foreground">Auswahl:</span>
       
       {imageCount > 0 && (
         <Button
           size="sm"
           variant={allImagesSelected ? "default" : "outline"}
-          className="h-7 gap-1.5 text-xs"
+          className="h-8 gap-1.5 text-xs"
           onClick={() => onSelectType('image')}
         >
-          <Image className="h-3.5 w-3.5" />
+          <ImageFormatIcon className="h-3.5 w-3.5" />
           Bilder ({imageCount})
         </Button>
       )}
@@ -62,10 +62,10 @@ export const SelectAllControls = ({
         <Button
           size="sm"
           variant={allVideosSelected ? "default" : "outline"}
-          className="h-7 gap-1.5 text-xs"
+          className="h-8 gap-1.5 text-xs"
           onClick={() => onSelectType('video')}
         >
-          <Film className="h-3.5 w-3.5" />
+          <VideoTimelineIcon className="h-3.5 w-3.5" />
           Videos ({videoCount})
         </Button>
       )}
@@ -74,10 +74,10 @@ export const SelectAllControls = ({
         <Button
           size="sm"
           variant="ghost"
-          className="h-7 gap-1 text-xs text-muted-foreground hover:text-destructive"
+          className="h-8 gap-1 text-xs text-muted-foreground hover:text-destructive"
           onClick={onClearSelection}
         >
-          <X className="h-3.5 w-3.5" />
+          <CloseSelectionIcon className="h-3.5 w-3.5" />
           Auswahl aufheben
         </Button>
       )}

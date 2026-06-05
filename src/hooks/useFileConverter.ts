@@ -4,7 +4,8 @@ import { useImageConverter } from './useImageConverter';
 import { useVideoConverter } from './useVideoConverter';
 import { useStatsTracker } from './useStatsTracker';
 import { useRateLimiter } from './useRateLimiter';
-import { removeBackground, Config } from '@imgly/background-removal';
+import { removeImageBackground, type BackgroundRemovalConfig } from '@/lib/backgroundRemoval';
+import { shouldExtractVideoPreview } from '@/lib/videoPreviewState';
 
 export const useFileConverter = () => {
   const [files, setFiles] = useState<ConvertibleFile[]>([]);
@@ -18,7 +19,7 @@ export const useFileConverter = () => {
   useEffect(() => {
     const extractPreviews = async () => {
       for (const file of files) {
-        if (file.type === 'video' && !videoPreviews[file.id]) {
+        if (shouldExtractVideoPreview(file, videoPreviews)) {
           try {
             const preview = await extractFrame(file.file, 0);
             setVideoPreviews(prev => ({ ...prev, [file.id]: preview }));
@@ -104,7 +105,7 @@ export const useFileConverter = () => {
   ) => {
     const updates: Partial<ConvertibleFile> = { cropArea, trimRange };
     if (dimensions) {
-      (updates as any).dimensions = dimensions;
+      updates.dimensions = dimensions;
     }
     updateFile(id, updates);
   }, [updateFile]);
@@ -136,7 +137,7 @@ export const useFileConverter = () => {
         if (fileItem.type === 'image' && fileItem.removeBackground) {
           updateFile(fileItem.id, { progress: 5 });
           
-          const config: Config = {
+          const config: BackgroundRemovalConfig = {
             // Ensure model + runtime assets resolve correctly.
             // Default upstream CDN format: https://staticimgly.com/${PACKAGE_NAME}-data/${PACKAGE_VERSION}/dist/
             publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/',
@@ -152,7 +153,7 @@ export const useFileConverter = () => {
             }
           };
 
-          const bgBlob = await removeBackground(fileToConvert, config);
+          const bgBlob = await removeImageBackground(fileToConvert, config);
           fileToConvert = new File([bgBlob], fileItem.file.name, { type: 'image/png' });
         }
 
@@ -167,8 +168,10 @@ export const useFileConverter = () => {
         const options = {
           qualitySettings: fileItem.qualitySettings,
           cropArea: fileItem.cropArea,
-          dimensions: (fileItem as any).dimensions,
+          dimensions: fileItem.dimensions,
           trimRange: fileItem.trimRange,
+          addWhiteBackground: false,
+          removeWatermark: fileItem.removeWatermark,
         };
 
         // For images with background removal to non-transparent format, add white background
@@ -176,7 +179,7 @@ export const useFileConverter = () => {
           const format = fileItem.qualitySettings.outputFormat as ImageOutputFormat | undefined;
           if (format === 'jpeg' || format === 'bmp') {
             // Add white background option - will be handled in image converter
-            (options as any).addWhiteBackground = true;
+            options.addWhiteBackground = true;
           }
         }
 
@@ -245,6 +248,8 @@ export const useFileConverter = () => {
             cropArea: undefined,
             trimRange: undefined,
             suggestedName: undefined,
+            removeBackground: undefined,
+            removeWatermark: undefined,
           };
         }
         return f;

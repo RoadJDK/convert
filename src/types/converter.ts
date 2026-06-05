@@ -1,11 +1,21 @@
+import {
+  detectFileType,
+  getOutputExtensionForFormat,
+  getOutputMimeTypeForFormat,
+  IMAGE_OUTPUT_OPTIONS,
+  SUPPORTED_IMAGE_MIME_TYPES,
+  SUPPORTED_VIDEO_MIME_TYPES,
+  VIDEO_OUTPUT_OPTIONS,
+} from '@/lib/formatCapabilities';
+
 export type FileType = 'image' | 'video';
 
 export type ConversionStatus = 'pending' | 'converting' | 'completed' | 'error';
 
 export type QualityMode = 'percentage' | 'maxSize';
 
-export type ImageOutputFormat = 'webp' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'avif';
-export type VideoOutputFormat = 'webm' | 'mp4' | 'gif' | 'mov' | 'avi' | 'mkv';
+export type ImageOutputFormat = 'webp' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'avif' | 'svg';
+export type VideoOutputFormat = 'webm' | 'mp4';
 export type OutputFormat = ImageOutputFormat | VideoOutputFormat;
 
 export interface QualitySettings {
@@ -41,6 +51,7 @@ export interface ConvertibleFile {
   error?: string;
   qualitySettings: QualitySettings;
   cropArea?: CropArea;
+  dimensions?: { width: number; height: number };
   originalSize: number;
   convertedSize?: number;
   // Video-specific
@@ -48,6 +59,7 @@ export interface ConvertibleFile {
   videoDuration?: number;
   // Image-specific
   removeBackground?: boolean; // Toggle for background removal during conversion
+  removeWatermark?: boolean; // Toggle for local lower-corner watermark cleanup during conversion
 }
 
 export const DEFAULT_QUALITY_SETTINGS: QualitySettings = {
@@ -66,83 +78,23 @@ export const DEFAULT_VIDEO_QUALITY_SETTINGS: QualitySettings = {
   outputFormat: 'webm', // Default output format for videos
 };
 
-export const SUPPORTED_IMAGE_FORMATS = [
-  'image/webp',
-  'image/png',
-  'image/jpeg',
-  'image/jpg',
-  'image/gif',
-  'image/bmp',
-  'image/tiff',
-  'image/svg+xml',
-  'image/heic',
-  'image/heif',
-];
-
-export const SUPPORTED_VIDEO_FORMATS = [
-  'video/webm',
-  'video/mp4',
-  'video/quicktime',
-  'video/x-msvideo',
-  'video/x-matroska',
-  'video/mpeg',
-  'video/ogg',
-  'video/3gpp',
-  'video/x-flv',
-  'video/x-ms-wmv',
-];
+export const SUPPORTED_IMAGE_FORMATS = SUPPORTED_IMAGE_MIME_TYPES;
+export const SUPPORTED_VIDEO_FORMATS = SUPPORTED_VIDEO_MIME_TYPES;
 
 export const getFileType = (file: File): FileType | null => {
-  if (SUPPORTED_IMAGE_FORMATS.includes(file.type)) return 'image';
-  if (SUPPORTED_VIDEO_FORMATS.includes(file.type)) return 'video';
-  return null;
+  return detectFileType(file);
 };
 
 export const getOutputExtension = (type: FileType, format?: OutputFormat): string => {
-  if (format) {
-    if (format === 'jpeg') return 'jpg';
-    return format;
-  }
-  return type === 'image' ? 'webp' : 'webm';
+  return getOutputExtensionForFormat(type, format);
 };
 
 export const getOutputMimeType = (type: FileType, format?: OutputFormat): string => {
-  if (format) {
-    const mimeMap: Record<OutputFormat, string> = {
-      webp: 'image/webp',
-      jpeg: 'image/jpeg',
-      png: 'image/png',
-      gif: 'image/gif',
-      bmp: 'image/bmp',
-      avif: 'image/avif',
-      webm: 'video/webm',
-      mp4: 'video/mp4',
-      mov: 'video/quicktime',
-      avi: 'video/x-msvideo',
-      mkv: 'video/x-matroska',
-    };
-    return mimeMap[format];
-  }
-  return type === 'image' ? 'image/webp' : 'video/webm';
+  return getOutputMimeTypeForFormat(type, format);
 };
 
-export const IMAGE_OUTPUT_FORMATS: { value: ImageOutputFormat; label: string }[] = [
-  { value: 'webp', label: 'WebP' },
-  { value: 'jpeg', label: 'JPEG' },
-  { value: 'png', label: 'PNG' },
-  { value: 'avif', label: 'AVIF' },
-  { value: 'gif', label: 'GIF' },
-  { value: 'bmp', label: 'BMP' },
-];
-
-export const VIDEO_OUTPUT_FORMATS: { value: VideoOutputFormat; label: string }[] = [
-  { value: 'webm', label: 'WebM' },
-  { value: 'mp4', label: 'MP4' },
-  { value: 'mov', label: 'MOV' },
-  { value: 'mkv', label: 'MKV' },
-  { value: 'avi', label: 'AVI' },
-  { value: 'gif', label: 'GIF' },
-];
+export const IMAGE_OUTPUT_FORMATS = IMAGE_OUTPUT_OPTIONS;
+export const VIDEO_OUTPUT_FORMATS = VIDEO_OUTPUT_OPTIONS;
 
 export const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;

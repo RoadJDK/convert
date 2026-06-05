@@ -26,7 +26,10 @@ export const FormatSelector = ({ fileType, currentFormat, onChange, disabled }: 
       onValueChange={(val) => onChange(val as OutputFormat)}
       disabled={disabled}
     >
-      <SelectTrigger className="h-8 w-[70px] px-2 text-xs bg-secondary/50 border-0 hover:bg-secondary">
+      <SelectTrigger
+        aria-label="Zielformat"
+        className="h-8 w-[70px] px-2 text-xs bg-secondary/50 border-0 hover:bg-secondary"
+      >
         <SelectValue>
           <span className="font-mono">.{extension}</span>
         </SelectValue>

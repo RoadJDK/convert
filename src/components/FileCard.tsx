@@ -1,14 +1,18 @@
-import { useCallback, useState, useEffect } from 'react';
-import { Download, Trash2, Play, AlertCircle, Loader2, Pencil, Crop, Sparkles, Image, Film, RotateCcw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { cn } from '@/lib/utils';
-import { ConvertibleFile, getOutputExtension, formatFileSize, QualitySettings, FileType, DEFAULT_QUALITY_SETTINGS, OutputFormat } from '@/types/converter';
-import { QualitySettings as QualitySettingsComponent } from './QualitySettings';
-import { CompressionStats } from './CompressionStats';
-import { FormatSelector } from './FormatSelector';
+import { useCallback, useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { CompressionStats } from "@/components/CompressionStats";
+import { FileCardActions } from "@/components/file-card/FileCardActions";
+import { FileCardPreview } from "@/components/file-card/FileCardPreview";
+import { useFilePreview } from "@/hooks/useFilePreview";
+import {
+  type ConvertibleFile,
+  formatFileSize,
+  getOutputExtension,
+  type QualitySettings,
+} from "@/types/converter";
+import { AlertMarkIcon, PencilTagIcon } from "@/components/icons/MediaConvertIcons";
 
 interface FileCardProps {
   file: ConvertibleFile;
@@ -27,6 +31,8 @@ interface FileCardProps {
   onReset?: () => void;
   removeBackgroundEnabled?: boolean;
   onToggleRemoveBackground?: (enabled: boolean) => void;
+  removeWatermarkEnabled?: boolean;
+  onToggleRemoveWatermark?: (enabled: boolean) => void;
 }
 
 export const FileCard = ({
@@ -46,46 +52,22 @@ export const FileCard = ({
   onReset,
   removeBackgroundEnabled,
   onToggleRemoveBackground,
+  removeWatermarkEnabled,
+  onToggleRemoveWatermark,
 }: FileCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [originalDimensions, setOriginalDimensions] = useState<{ width: number; height: number } | undefined>();
-
+  const [editName, setEditName] = useState("");
+  const { originalDimensions, showPreview } = useFilePreview(file, videoPreviewUrl);
   const extension = getOutputExtension(file.type, file.qualitySettings.outputFormat);
-
-  // Generate preview URL and get dimensions for images
-  useEffect(() => {
-    if (file.type === 'image') {
-      const url = URL.createObjectURL(file.file);
-      setPreviewUrl(url);
-      
-      // Get image dimensions
-      const img = new window.Image();
-      img.onload = () => {
-        setOriginalDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-      };
-      img.src = url;
-      
-      return () => URL.revokeObjectURL(url);
-    } else if (file.type === 'video') {
-      // Get video dimensions
-      const video = document.createElement('video');
-      video.preload = 'metadata';
-      video.onloadedmetadata = () => {
-        setOriginalDimensions({ width: video.videoWidth, height: video.videoHeight });
-      };
-      video.src = URL.createObjectURL(file.file);
-    }
-  }, [file.file, file.type]);
+  const showIndividualActions = !selected;
 
   const getDisplayName = () => {
-    const baseName = file.suggestedName || file.originalName.replace(/\.[^/.]+$/, '');
+    const baseName = file.suggestedName || file.originalName.replace(/\.[^/.]+$/, "");
     return `${baseName}.${extension}`;
   };
 
   const handleStartEdit = useCallback(() => {
-    const baseName = file.suggestedName || file.originalName.replace(/\.[^/.]+$/, '');
+    const baseName = file.suggestedName || file.originalName.replace(/\.[^/.]+$/, "");
     setEditName(baseName);
     setIsEditing(true);
   }, [file.suggestedName, file.originalName]);
@@ -98,76 +80,34 @@ export const FileCard = ({
   }, [editName, onRename]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
+    (event: React.KeyboardEvent) => {
+      if (event.key === "Enter") {
         handleSaveEdit();
-      } else if (e.key === 'Escape') {
+      } else if (event.key === "Escape") {
         setIsEditing(false);
       }
     },
-    [handleSaveEdit]
+    [handleSaveEdit],
   );
 
-  // Hide individual action buttons when file is selected (in group)
-  const showIndividualActions = !selected;
-
-  // Determine preview to show
-  const showPreview = file.type === 'image' ? previewUrl : videoPreviewUrl;
-
   return (
-    <div className="group rounded-xl bg-card p-3 sm:p-4 shadow-soft transition-all duration-200 hover:shadow-lifted">
+    <div className="glass-panel group rounded-xl p-3 transition-all duration-200 hover:border-primary/30 hover:shadow-lifted sm:p-4">
       <div className="flex items-start gap-3 sm:gap-4">
-        {/* Checkbox for selection */}
         {showCheckbox && (
           <div className="flex items-center pt-2 sm:pt-3">
-            <Checkbox
-              checked={selected}
-              onCheckedChange={(checked) => onSelectChange?.(checked === true)}
-            />
+            <Checkbox checked={selected} onCheckedChange={(checked) => onSelectChange?.(checked === true)} />
           </div>
         )}
 
-        {/* Preview/Icon with File Type Badge */}
-        <div className="relative">
-          <div
-            className={cn(
-              'flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-lg overflow-hidden',
-              file.type === 'image' ? 'bg-primary/20' : 'bg-accent/20'
-            )}
-          >
-            {showPreview ? (
-              <img
-                src={showPreview}
-                alt={file.originalName}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-accent">
-                <Play className="h-5 w-5 sm:h-6 sm:w-6" />
-              </div>
-            )}
-          </div>
-          {/* File Type Icon Badge */}
-          <div className={cn(
-            'absolute -top-1 -left-1 rounded-full p-0.5',
-            file.type === 'image' ? 'bg-primary text-primary-foreground' : 'bg-accent text-accent-foreground'
-          )}>
-            {file.type === 'image' ? (
-              <Image className="h-3 w-3" />
-            ) : (
-              <Film className="h-3 w-3" />
-            )}
-          </div>
-        </div>
+        <FileCardPreview file={file} previewUrl={showPreview} />
 
-        {/* Info */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {isEditing ? (
               <div className="flex flex-1 items-center gap-2">
                 <Input
                   value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
+                  onChange={(event) => setEditName(event.target.value)}
                   onBlur={handleSaveEdit}
                   onKeyDown={handleKeyDown}
                   className="h-8 text-sm"
@@ -177,188 +117,75 @@ export const FileCard = ({
               </div>
             ) : (
               <>
-                <p className="truncate text-sm sm:text-base font-medium text-foreground" title={getDisplayName()}>
+                <p className="truncate text-sm font-medium text-foreground sm:text-base" title={getDisplayName()}>
                   {getDisplayName()}
                 </p>
-                {file.status === 'completed' && (
-                  <button
-                    onClick={handleStartEdit}
-                    className="opacity-0 transition-opacity group-hover:opacity-100"
-                  >
-                    <Pencil className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                {file.status === "completed" && (
+                  <button onClick={handleStartEdit} className="opacity-0 transition-opacity group-hover:opacity-100">
+                    <PencilTagIcon className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                   </button>
                 )}
               </>
             )}
           </div>
 
-          <p className="mt-1 text-xs text-muted-foreground truncate">
+          <p className="mt-1 truncate text-xs text-muted-foreground">
             <span className="hidden sm:inline">{file.originalName} • </span>
             {formatFileSize(file.file.size)}
-            {file.cropArea && (
-              <span className="ml-2 text-primary">• Zugeschnitten</span>
-            )}
-            {file.trimRange && (
-              <span className="ml-2 text-accent">• Geschnitten</span>
-            )}
+            {file.cropArea && <span className="ml-2 text-primary">• Zugeschnitten</span>}
+            {file.trimRange && <span className="ml-2 text-accent">• Geschnitten</span>}
           </p>
 
-          {/* Quality indicator for pending files */}
-          {file.status === 'pending' && (
+          {file.status === "pending" && (
             <p className="mt-1 text-xs text-muted-foreground">
-              Qualität: {file.qualitySettings.mode === 'percentage' 
-                ? `${file.qualitySettings.percentage}%` 
-                : `max ${file.qualitySettings.maxSizeKB} KB`}
+              Qualität: {file.qualitySettings.mode === "percentage" ? `${file.qualitySettings.percentage}%` : `max ${file.qualitySettings.maxSizeKB} KB`}
             </p>
           )}
 
-          {/* Progress Bar during conversion */}
-          {file.status === 'converting' && (
+          {file.status === "converting" && (
             <div className="mt-2 sm:mt-3">
               <Progress value={file.progress} className="h-2" />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Konvertiere... {Math.round(file.progress)}%
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">Konvertiere... {Math.round(file.progress)}%</p>
             </div>
           )}
 
-          {/* Compression Stats */}
-          {file.status === 'completed' && file.convertedSize && (
+          {file.status === "completed" && file.convertedSize && (
             <div className="mt-2">
-              <CompressionStats 
-                originalSize={file.originalSize} 
-                convertedSize={file.convertedSize} 
-              />
+              <CompressionStats originalSize={file.originalSize} convertedSize={file.convertedSize} />
             </div>
           )}
 
-          {/* Error */}
-          {file.status === 'error' && (
+          {file.status === "error" && (
             <div className="mt-2 flex items-center gap-2 text-destructive">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span className="text-xs truncate">{file.error}</span>
+              <AlertMarkIcon className="h-4 w-4 shrink-0" />
+              <span className="truncate text-xs">{file.error}</span>
             </div>
           )}
 
-          {/* Rename hint */}
-          {file.suggestedName && file.status === 'completed' && (
+          {file.suggestedName && file.status === "completed" && (
             <div className="mt-2 flex items-center gap-2 rounded-md bg-primary/10 px-2 py-1">
-              <span className="text-xs text-primary">
-                ✨ KI-Vorschlag angewendet
-              </span>
+              <span className="text-xs text-primary">KI-Vorschlag angewendet</span>
             </div>
           )}
         </div>
 
-        {/* Actions */}
-        <div className="flex shrink-0 items-center gap-1 flex-wrap justify-end">
-          {file.status === 'pending' && showIndividualActions && (
-            <>
-              <div className="hidden sm:flex items-center gap-1">
-                <FormatSelector
-                  fileType={file.type}
-                  currentFormat={file.qualitySettings.outputFormat}
-                  onChange={(format: OutputFormat) => onSettingsChange({ ...file.qualitySettings, outputFormat: format })}
-                />
-                <QualitySettingsComponent
-                  settings={file.qualitySettings}
-                  onChange={onSettingsChange}
-                  originalSize={file.originalSize}
-                  originalFormat={file.file.type}
-                  originalDimensions={originalDimensions}
-                  cropArea={file.cropArea}
-                  fileType={file.type}
-                  removeBackground={removeBackgroundEnabled}
-                  onRemoveBackgroundChange={onToggleRemoveBackground}
-                />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={onCropClick}
-                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                  title="Zuschneiden"
-                >
-                  <Crop className="h-4 w-4" />
-                </Button>
-                {onAIRename && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={onAIRename}
-                    disabled={isAIRenaming}
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    title="KI-Umbenennung"
-                  >
-                    {isAIRenaming ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-4 w-4" />
-                    )}
-                  </Button>
-                )}
-              </div>
-              <Button
-                size="sm"
-                onClick={onConvert}
-                className="gap-1 sm:gap-2 ml-1 sm:ml-2"
-              >
-                <Play className="h-4 w-4" />
-                <span className="hidden sm:inline">Start</span>
-              </Button>
-            </>
-          )}
-
-          {file.status === 'pending' && !showIndividualActions && (
-            <span className="text-xs text-muted-foreground italic hidden sm:inline">
-              Gruppenauswahl
-            </span>
-          )}
-
-          {file.status === 'converting' && (
-            <Button size="sm" disabled variant="secondary" className="h-8 w-8 p-0">
-              <Loader2 className="h-4 w-4 animate-spin" />
-            </Button>
-          )}
-
-          {file.status === 'completed' && (
-            <div className="flex items-center gap-1">
-              {onReset && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={onReset}
-                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                  title="Zurücksetzen und neu konfigurieren"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                </Button>
-              )}
-              <Button
-                size="sm"
-                onClick={() => onDownload()}
-                className="gap-1 sm:gap-2 bg-success text-success-foreground hover:bg-success/90"
-              >
-                <Download className="h-4 w-4" />
-                <span className="hidden sm:inline">Download</span>
-              </Button>
-            </div>
-          )}
-
-          {file.status === 'error' && (
-            <Button size="sm" variant="secondary" onClick={onConvert}>
-              Erneut
-            </Button>
-          )}
-
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onRemove}
-            className="text-muted-foreground hover:text-destructive h-8 w-8 p-0"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
+        <FileCardActions
+          file={file}
+          isAIRenaming={isAIRenaming}
+          originalDimensions={originalDimensions}
+          removeBackgroundEnabled={removeBackgroundEnabled}
+          removeWatermarkEnabled={removeWatermarkEnabled}
+          showIndividualActions={showIndividualActions}
+          onAIRename={onAIRename}
+          onConvert={onConvert}
+          onCropClick={onCropClick}
+          onDownload={() => onDownload()}
+          onRemove={onRemove}
+          onReset={onReset}
+          onSettingsChange={onSettingsChange}
+          onToggleRemoveBackground={onToggleRemoveBackground}
+          onToggleRemoveWatermark={onToggleRemoveWatermark}
+        />
       </div>
     </div>
   );

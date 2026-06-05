@@ -1,6 +1,6 @@
-import { ArrowDown, ArrowUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatFileSize, calculateSizeChange } from '@/types/converter';
+import { DirectionDownIcon, DirectionUpIcon } from '@/components/icons/MediaConvertIcons';
 
 interface CompressionStatsProps {
   originalSize: number;
@@ -18,9 +18,9 @@ export const CompressionStats = ({ originalSize, convertedSize }: CompressionSta
         : 'bg-destructive/20 text-destructive'
     )}>
       {isSmaller ? (
-        <ArrowDown className="h-3 w-3" />
+        <DirectionDownIcon className="h-3 w-3" />
       ) : (
-        <ArrowUp className="h-3 w-3" />
+        <DirectionUpIcon className="h-3 w-3" />
       )}
       <span>{percentage.toFixed(1)}%</span>
       <span className="text-muted-foreground">

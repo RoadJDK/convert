@@ -1,6 +1,6 @@
 import * as React from "react";
 import { OTPInput, OTPInputContext } from "input-otp";
-import { Dot } from "lucide-react";
+import { DotMarkIcon as Dot } from "@/components/icons/MediaConvertIcons";
 
 import { cn } from "@/lib/utils";
 

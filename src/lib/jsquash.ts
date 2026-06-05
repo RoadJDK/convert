@@ -12,8 +12,31 @@ import oxipngWasmUrl from "@jsquash/oxipng/codec/pkg/squoosh_oxipng_bg.wasm?url"
 
 let webpReady: Promise<void> | null = null;
 let avifReady: Promise<void> | null = null;
-let avifModule: any = null;
+let avifModule: AvifEncoderModule | null = null;
 let oxipngReady: Promise<void> | null = null;
+
+type AvifEncodeOptions = {
+  cqLevel: number;
+  cqAlphaLevel: number;
+  speed: number;
+  subsample: number;
+  chromaDeltaQ: boolean;
+  sharpness: number;
+  tune: number;
+};
+
+type AvifEncoderModule = {
+  encode: (
+    data: Uint8Array,
+    width: number,
+    height: number,
+    options: AvifEncodeOptions,
+  ) => Uint8Array | null;
+};
+
+type AvifEncoderFactory = (options: {
+  locateFile: (path: string) => string;
+}) => Promise<AvifEncoderModule>;
 
 async function ensureWebpReady() {
   if (webpReady) return webpReady;
@@ -36,7 +59,7 @@ async function ensureAvifReady() {
   avifReady = (async () => {
     // Dynamically import the single-thread AVIF encoder to avoid worker bundling issues
     const avifEncoderModule = await import("@jsquash/avif/codec/enc/avif_enc.js");
-    const avifEncoder = avifEncoderModule.default;
+    const avifEncoder = avifEncoderModule.default as AvifEncoderFactory;
 
     // Initialize with locateFile to use our bundled WASM
     avifModule = await avifEncoder({

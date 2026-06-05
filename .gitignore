@@ -10,7 +10,35 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.astro
 *.local
+
+# Maibach project artifacts (managed)
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+build/
+.astro/
+.next/
+.wrangler/
+coverage/
+test-results/
+playwright-report/
+# End Maibach project artifacts
+
+# Maibach setup files (managed)
+AGENTS.md
+CLAUDE.md
+.maibach/
+.agents/skills/maibach-*/
+.claude/skills/maibach-*/
+.codex/hooks.json
+.claude/settings.local.json
+# End Maibach setup files
 
 # Editor directories and files
 .vscode/*
