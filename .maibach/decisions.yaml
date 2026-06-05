@@ -1,0 +1,116 @@
+version: 1
+updated_at: 2026-06-05
+# Durable project decisions only; active work stays in plan.md/session-state.yaml.
+# status: accepted | superseded | rescinded | needs_review
+# required item fields: id, status, kind, scope, decision, rationale, authority, evidence_refs, decided_at, last_confirmed_at, review_trigger
+items:
+  - id: "dec-plan-dateiinhalt-frames-und-ai-inferenz-bleiben-l"
+    status: "needs_review"
+    kind: "plan_register"
+    scope: "project"
+    tags:
+    - "maibach"
+    - "plan-register"
+    decision: "Dateiinhalt, Frames und AI-Inferenz bleiben lokal im Browser; Cloudflare/Server nur fuer App- und Asset-Auslieferung."
+    rationale: "Lossless migration from .maibach/plan.md Decision Register."
+    authority: "plan_register"
+    evidence_refs:
+    - ".maibach/plan.md#Decision Register"
+    decided_at: "2026-06-05"
+    last_confirmed_at: "2026-06-05"
+    review_trigger: "Review before relying on migrated plan-register decisions in a future slice."
+    supersedes: []
+    superseded_by: "-"
+    source_text: |-
+      id: local-first-boundary
+      decision: Dateiinhalt, Frames und AI-Inferenz bleiben lokal im Browser; Cloudflare/Server nur fuer App- und Asset-Auslieferung.
+      evidence: ADR 0001 und Nutzerziel, Smallpdf-artige Upload-Converter ueber Privacy zu schlagen.
+      next_review: Nur mit explizitem Nutzerentscheid fuer opt-in Hosted-AI.
+  - id: "dec-plan-zuerst-gemeinsame-pipeline-worker-capability"
+    status: "needs_review"
+    kind: "plan_register"
+    scope: "project"
+    tags:
+    - "maibach"
+    - "plan-register"
+    decision: "Zuerst gemeinsame Pipeline, Worker, Capability-Profile und OPFS-Cache bauen, dann einzelne Features migrieren."
+    rationale: "Lossless migration from .maibach/plan.md Decision Register."
+    authority: "plan_register"
+    evidence_refs:
+    - ".maibach/plan.md#Decision Register"
+    decided_at: "2026-06-05"
+    last_confirmed_at: "2026-06-05"
+    review_trigger: "Review before relying on migrated plan-register decisions in a future slice."
+    supersedes: []
+    superseded_by: "-"
+    source_text: |-
+      id: engine-before-features
+      decision: Zuerst gemeinsame Pipeline, Worker, Capability-Profile und OPFS-Cache bauen, dann einzelne Features migrieren.
+      evidence: Aktuelle Codebase verteilt Rename, Image, Video, Watermark und Queue als Ad-hoc-Hooks/Libs.
+      next_review: Vor produktiver Migration in Slice 2 pruefen, ob Rename v2 den Engine-Unterbau direkt nutzt oder erst ueber einen Mock-Adapter angebunden wird.
+  - id: "dec-plan-mediarecorder-realtime-pfad-fuer-editierte-v"
+    status: "needs_review"
+    kind: "plan_register"
+    scope: "project"
+    tags:
+    - "maibach"
+    - "plan-register"
+    decision: "MediaRecorder-Realtime-Pfad fuer editierte Videos ersetzen; WebCodecs plus MediaBunny-artige Demux/Mux/Conversion-Schicht als Zielpfad, FFmpeg.wasm nur optionaler Exoten-Fallback."
+    rationale: "Lossless migration from .maibach/plan.md Decision Register."
+    authority: "plan_register"
+    evidence_refs:
+    - ".maibach/plan.md#Decision Register"
+    decided_at: "2026-06-05"
+    last_confirmed_at: "2026-06-05"
+    review_trigger: "Review before relying on migrated plan-register decisions in a future slice."
+    supersedes: []
+    superseded_by: "-"
+    source_text: |-
+      id: video-core-direction
+      decision: MediaRecorder-Realtime-Pfad fuer editierte Videos ersetzen; WebCodecs plus MediaBunny-artige Demux/Mux/Conversion-Schicht als Zielpfad, FFmpeg.wasm nur optionaler Exoten-Fallback.
+      evidence: Aktuelle Video-Edits laufen ueber Canvas captureStream/MediaRecorder; externe 2026-Docs zeigen WebCodecs/Muxer als passenderen Pfad.
+      next_review: Bei API-Prototyp gegen echte Testvideos.
+  - id: "dec-plan-vit-gpt2-captioning-nicht-weiter-tunen-renam"
+    status: "needs_review"
+    kind: "plan_register"
+    scope: "project"
+    tags:
+    - "maibach"
+    - "plan-register"
+    decision: "`vit-gpt2`-Captioning nicht weiter tunen; Rename v2 bekommt Multi-Signal-Inputs aus modernem lokalem VLM/OCR/OD plus deterministischem Scorer."
+    rationale: "Lossless migration from .maibach/plan.md Decision Register."
+    authority: "plan_register"
+    evidence_refs:
+    - ".maibach/plan.md#Decision Register"
+    decided_at: "2026-06-05"
+    last_confirmed_at: "2026-06-05"
+    review_trigger: "Review before relying on migrated plan-register decisions in a future slice."
+    supersedes: []
+    superseded_by: "-"
+    source_text: |-
+      id: ai-rename-direction
+      decision: `vit-gpt2`-Captioning nicht weiter tunen; Rename v2 bekommt Multi-Signal-Inputs aus modernem lokalem VLM/OCR/OD plus deterministischem Scorer.
+      evidence: Aktuelle `renamePlan.ts` kann aus schwachen Captions nur Woerter zaehlen und erzeugt generische Namen wie `fish-large-water`.
+      next_review: Nach A/B-Fixture-Matrix vit-gpt2 vs Florence/SmolVLM-Kandidaten.
+  - id: "dec-plan-watermark-object-removal-als-autorisierte-lo"
+    status: "needs_review"
+    kind: "plan_register"
+    scope: "project"
+    tags:
+    - "maibach"
+    - "plan-register"
+    decision: "Watermark/Object-Removal als autorisierte lokale Bearbeitung planen, getiert in Smart Crop/Mask/Inpainter; keine Garantie fuer bewegte Drittplattform-Watermarks auf allen Geraeten."
+    rationale: "Lossless migration from .maibach/plan.md Decision Register."
+    authority: "plan_register"
+    evidence_refs:
+    - ".maibach/plan.md#Decision Register"
+    decided_at: "2026-06-05"
+    last_confirmed_at: "2026-06-05"
+    review_trigger: "Review before relying on migrated plan-register decisions in a future slice."
+    supersedes: []
+    superseded_by: "-"
+    source_text: |-
+      id: watermark-boundary
+      decision: Watermark/Object-Removal als autorisierte lokale Bearbeitung planen, getiert in Smart Crop/Mask/Inpainter; keine Garantie fuer bewegte Drittplattform-Watermarks auf allen Geraeten.
+      evidence: Aktuelle Implementierung ist statische Blur/Copy-Heuristik und bewegte Logos brauchen Detection plus zeitlich stabile Inpainting-Strategie.
+      next_review: Vor UI-Text und vor Inpainting-Slice.

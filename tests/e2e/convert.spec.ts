@@ -68,6 +68,91 @@ const expectFileCardActionsToFit = async (page: Page) => {
   }
 };
 
+const expectPendingFileCardActionsToUseMobileToolbar = async (page: Page) => {
+  const metrics = await page.getByTestId("file-card-actions").first().evaluate((actions) => {
+    const controls = Array.from(actions.querySelectorAll("button,[role='combobox']")).map((control) => {
+      const rect = control.getBoundingClientRect();
+      return {
+        label:
+          control.getAttribute("aria-label") ||
+          control.textContent?.replace(/\s+/g, " ").trim() ||
+          control.getAttribute("title") ||
+          control.tagName,
+        left: Math.round(rect.left),
+        top: Math.round(rect.top),
+        right: Math.round(rect.right),
+        bottom: Math.round(rect.bottom),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      };
+    });
+    const rowTops = [...new Set(controls.map((control) => control.top))].sort((a, b) => a - b);
+
+    return {
+      controls,
+      rowTops,
+      viewportWidth: window.innerWidth,
+    };
+  });
+
+  expect(metrics.viewportWidth).toBe(360);
+  expect(metrics.rowTops).toHaveLength(2);
+
+  const firstRow = metrics.controls.filter((control) => control.top === metrics.rowTops[0]);
+  const secondRow = metrics.controls.filter((control) => control.top === metrics.rowTops[1]);
+  expect(firstRow.map((control) => control.label)).toEqual([
+    "Zielformat",
+    "Qualitätseinstellungen",
+    "Zuschneiden",
+    "KI-Umbenennung",
+    "Datei entfernen",
+  ]);
+  expect(secondRow.map((control) => control.label)).toEqual(["Start"]);
+
+  const startButton = secondRow[0];
+  expect(startButton.width).toBeGreaterThanOrEqual(280);
+  expect(metrics.controls.filter((control) => control.width < 44 || control.height < 44)).toEqual([]);
+  expect(metrics.controls.filter((control) => control.left < 0 || control.right > metrics.viewportWidth)).toEqual([]);
+};
+
+const expectFileCardPreviewIconToBeCentered = async (page: Page) => {
+  const metrics = await page.getByTestId("file-card-preview").first().evaluate((preview) => {
+    const marker = preview.querySelector('[data-testid="file-card-preview-type-icon"]');
+    if (!marker) {
+      throw new Error("Preview type marker is missing");
+    }
+
+    const previewRect = preview.getBoundingClientRect();
+    const markerRect = marker.getBoundingClientRect();
+    const previewCenter = {
+      x: previewRect.left + previewRect.width / 2,
+      y: previewRect.top + previewRect.height / 2,
+    };
+    const markerCenter = {
+      x: markerRect.left + markerRect.width / 2,
+      y: markerRect.top + markerRect.height / 2,
+    };
+
+    return {
+      deltaX: Math.abs(markerCenter.x - previewCenter.x),
+      deltaY: Math.abs(markerCenter.y - previewCenter.y),
+      marker: {
+        width: Math.round(markerRect.width),
+        height: Math.round(markerRect.height),
+      },
+      preview: {
+        width: Math.round(previewRect.width),
+        height: Math.round(previewRect.height),
+      },
+    };
+  });
+
+  expect(metrics.deltaX).toBeLessThanOrEqual(1);
+  expect(metrics.deltaY).toBeLessThanOrEqual(1);
+  expect(metrics.marker.width).toBeGreaterThan(0);
+  expect(metrics.marker.height).toBeGreaterThan(0);
+};
+
 const createSampleWebm = async (page: Page): Promise<Buffer> => {
   const bytes = await page.evaluate(async () => {
     const canvas = document.createElement("canvas");
@@ -204,6 +289,28 @@ test("opens the file picker from the drop-zone copy and compacts after upload", 
       timeout: 2_000,
     })
     .toBeLessThan((expandedBox?.height ?? 0) - 90);
+
+  await guards.assertClean();
+});
+
+test("keeps pending file actions as a stable 360px mobile toolbar", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "360px toolbar regression is covered by the mobile project");
+
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  const guards = installPageGuards(page);
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "mobile-toolbar.png",
+    mimeType: "image/png",
+    buffer: SAMPLE_PNG,
+  });
+
+  await expect(page.getByAltText("mobile-toolbar.png")).toBeVisible();
+  await expectFileCardPreviewIconToBeCentered(page);
+  await expectFileCardActionsToFit(page);
+  await expectPendingFileCardActionsToUseMobileToolbar(page);
 
   await guards.assertClean();
 });

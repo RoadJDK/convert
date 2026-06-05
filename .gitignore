@@ -13,6 +13,17 @@ dist-ssr
 .astro
 *.local
 
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
 # Maibach project artifacts (managed)
 .DS_Store
 *.log
@@ -33,20 +44,9 @@ playwright-report/
 # Maibach setup files (managed)
 AGENTS.md
 CLAUDE.md
-.maibach/
-.agents/skills/maibach-*/
-.claude/skills/maibach-*/
+.maibach/*
+!.maibach/
+!.maibach/decisions.yaml
 .codex/hooks.json
 .claude/settings.local.json
 # End Maibach setup files
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
