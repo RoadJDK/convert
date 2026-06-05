@@ -1,78 +1,44 @@
 import type { FileType } from "@/types/converter";
-import { buildRenameCandidate, selectVideoFrameTimes } from "@/lib/renamePlan";
+import type { DeviceProfile } from "@/lib/localProcessingEngine";
+import type { RenameModelAdapter } from "@/lib/renameModelAdapter";
+import { createDeviceProfile } from "@/lib/localProcessingEngine";
+import { buildRenamePlan, selectVideoFrameTimes } from "@/lib/renamePlan";
+import { createUnavailableRenameModelAdapter } from "@/lib/renameModelAdapter";
 import { readDisplayableImageAsDataUrl } from "@/lib/displayableImage";
 
 type LocalAIRenameInput = {
   originalName: string;
   fileType: FileType;
   file?: File;
+  deviceProfile?: DeviceProfile;
+  modelAdapter?: RenameModelAdapter;
 };
 
-type ImageToTextOutput = { generated_text: string };
-type ImageToTextPipeline = (input: string) => Promise<ImageToTextOutput | ImageToTextOutput[]>;
-type TransformersModule = {
-  pipeline: (
-    task: "image-to-text",
-    model: string,
-    options?: { device?: "webgpu" },
-  ) => Promise<ImageToTextPipeline>;
-};
-
-const TRANSFORMERS_MODULE_URL = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0";
-const IMAGE_CAPTION_MODEL = "Xenova/vit-gpt2-image-captioning";
 const CAPTION_IMAGE_SIZE = 448;
 
-let captionerPromise: Promise<ImageToTextPipeline> | null = null;
+const defaultRenameModelAdapter = createUnavailableRenameModelAdapter();
 
 export async function generateLocalAIRename({
   originalName,
   fileType,
   file,
+  deviceProfile = createBrowserDeviceProfile(),
+  modelAdapter = defaultRenameModelAdapter,
 }: LocalAIRenameInput): Promise<string> {
-  if (!file) {
-    return buildRenameCandidate({ captions: [], originalName, fileType });
-  }
+  const imageInputs = file && modelAdapter.requiresImageInputs
+    ? fileType === "video"
+      ? await extractVideoFrameDataUrls(file)
+      : [await resizeImageToDataUrl(file)]
+    : [];
 
-  const imageInputs = fileType === "video"
-    ? await extractVideoFrameDataUrls(file)
-    : [await resizeImageToDataUrl(file)];
-
-  const captions = await captionImages(imageInputs);
-  return buildRenameCandidate({ captions, originalName, fileType });
-}
-
-async function captionImages(imageInputs: string[]): Promise<string[]> {
-  const captioner = await getCaptioner();
-  const captions: string[] = [];
-
-  for (const imageInput of imageInputs) {
-    const result = await captioner(imageInput);
-    const firstResult = Array.isArray(result) ? result[0] : result;
-    if (firstResult?.generated_text) {
-      captions.push(firstResult.generated_text);
-    }
-  }
-
-  return captions;
-}
-
-async function getCaptioner(): Promise<ImageToTextPipeline> {
-  captionerPromise ??= createCaptioner();
-  return captionerPromise;
-}
-
-async function createCaptioner(): Promise<ImageToTextPipeline> {
-  const module = (await import(/* @vite-ignore */ TRANSFORMERS_MODULE_URL)) as TransformersModule;
-
-  if (supportsWebGPU()) {
-    try {
-      return await module.pipeline("image-to-text", IMAGE_CAPTION_MODEL, { device: "webgpu" });
-    } catch (error) {
-      console.warn("[localAIRename] WebGPU caption model failed, falling back to WASM", error);
-    }
-  }
-
-  return module.pipeline("image-to-text", IMAGE_CAPTION_MODEL);
+  const signals = await modelAdapter.analyze({
+    originalName,
+    fileType,
+    file,
+    imageInputs,
+    deviceProfile,
+  });
+  return buildRenamePlan({ signals, originalName, fileType }).name;
 }
 
 async function extractVideoFrameDataUrls(file: File): Promise<string[]> {
@@ -185,4 +151,35 @@ function waitForMediaEvent<TEventName extends keyof HTMLMediaElementEventMap>(
 
 function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && "gpu" in navigator;
+}
+
+function createBrowserDeviceProfile(): DeviceProfile {
+  return createDeviceProfile({
+    hardwareConcurrency: typeof navigator === "undefined" ? undefined : navigator.hardwareConcurrency,
+    deviceMemoryGB: readDeviceMemory(),
+    webgpu: supportsWebGPU(),
+    webcodecs: supportsWebCodecs(),
+    opfs: supportsOPFS(),
+    mobile: isLikelyMobile(),
+  });
+}
+
+function readDeviceMemory(): number | undefined {
+  if (typeof navigator === "undefined") return undefined;
+  const navigatorWithMemory = navigator as Navigator & { deviceMemory?: number };
+  return navigatorWithMemory.deviceMemory;
+}
+
+function supportsWebCodecs(): boolean {
+  return typeof globalThis !== "undefined" && "VideoEncoder" in globalThis && "VideoDecoder" in globalThis;
+}
+
+function supportsOPFS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const storage = navigator.storage as StorageManager & { getDirectory?: unknown };
+  return typeof storage?.getDirectory === "function";
+}
+
+function isLikelyMobile(): boolean {
+  return typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches === true;
 }

@@ -25,7 +25,7 @@ export const useAIRename = () => {
 
     try {
       if (!hasShownLocalModelToast) {
-        toast.info('Lokales KI-Modell wird vorbereitet. Der erste Lauf kann dauern.');
+        toast.info('Lokaler Rename wird vorbereitet. Modelladapter laufen ohne Upload deiner Datei.');
         hasShownLocalModelToast = true;
       }
 
