@@ -36,7 +36,8 @@ describe("DropZone", () => {
     const dropZone = screen.getByTestId("drop-zone");
 
     expect(dropZone).toHaveAttribute("data-compact", "true");
-    expect(dropZone.className).toContain("h-[118px]");
+    expect(dropZone.className).toContain("h-[156px]");
+    expect(dropZone.className).toContain("sm:h-[118px]");
     expect(dropZone.className).toContain("motion-safe:duration-300");
     expect(dropZone.className).not.toContain("h-[270px]");
     expect(dropZone.className).not.toContain("transition-[min-height,padding");
@@ -49,13 +50,14 @@ describe("DropZone", () => {
     const heading = screen.getByText("Dateien hierher ziehen");
 
     fireEvent.dragEnter(dropZone);
-    expect(dropZone.className).toContain("border-primary");
+    expect(dropZone.className).toContain("bg-primary/10");
 
     fireEvent.dragEnter(heading);
     fireEvent.dragLeave(heading);
-    expect(dropZone.className).toContain("border-primary");
+    expect(dropZone.className).toContain("bg-primary/10");
 
     fireEvent.dragLeave(dropZone);
-    expect(dropZone.className).not.toContain("border-primary");
+    expect(dropZone.className).not.toContain("bg-primary/10");
+    expect(dropZone.className).toContain("border-white/10");
   });
 });

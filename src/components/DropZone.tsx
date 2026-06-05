@@ -117,8 +117,8 @@ export const DropZone = ({ hasFiles = false, onFilesAdded }: DropZoneProps) => {
       data-testid="drop-zone"
       data-compact={hasFiles ? 'true' : 'false'}
       className={cn(
-        'glass-panel relative block cursor-pointer overflow-hidden rounded-xl border-2 border-dashed text-center motion-safe:transition-[height,border-color,background-color,box-shadow] motion-safe:duration-300 motion-safe:ease-out',
-        hasFiles ? 'h-[118px] sm:text-left' : 'h-[270px]',
+        'glass-panel relative block cursor-pointer overflow-hidden rounded-xl border-2 border-dashed text-center outline-none focus-within:border-primary/70 focus-within:ring-2 focus-within:ring-primary/45 focus-within:ring-offset-2 focus-within:ring-offset-background motion-safe:transition-[height,border-color,background-color,box-shadow] motion-safe:duration-300 motion-safe:ease-out',
+        hasFiles ? 'h-[156px] sm:h-[118px] sm:text-left' : 'h-[270px]',
         isDragOver
           ? 'border-primary bg-primary/10'
           : 'border-white/10'

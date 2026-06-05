@@ -91,8 +91,11 @@ export const FileCard = ({
   );
 
   return (
-    <div className="glass-panel group rounded-xl p-3 transition-all duration-200 hover:border-primary/30 hover:shadow-lifted sm:p-4">
-      <div className="flex items-start gap-3 sm:gap-4">
+    <div
+      className="glass-panel group rounded-xl p-3 transition-all duration-200 hover:border-primary/30 hover:shadow-lifted sm:p-4"
+      data-testid="file-card"
+    >
+      <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap sm:gap-4">
         {showCheckbox && (
           <div className="flex items-center pt-2 sm:pt-3">
             <Checkbox checked={selected} onCheckedChange={(checked) => onSelectChange?.(checked === true)} />

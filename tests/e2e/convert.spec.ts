@@ -36,6 +36,38 @@ const installPageGuards = (page: Page) => {
   };
 };
 
+const expectFileCardActionsToFit = async (page: Page) => {
+  const metrics = await page.getByTestId("file-card-actions").first().evaluate((actions) => {
+    const viewportWidth = window.innerWidth;
+    const controls = Array.from(actions.querySelectorAll("button,[role='combobox']")).map((control) => {
+      const rect = control.getBoundingClientRect();
+      return {
+        label:
+          control.getAttribute("aria-label") ||
+          control.textContent?.replace(/\s+/g, " ").trim() ||
+          control.getAttribute("title") ||
+          control.tagName,
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        offLeft: Math.max(0, Math.round(0 - rect.left)),
+        offRight: Math.max(0, Math.round(rect.right - viewportWidth)),
+      };
+    });
+
+    return { viewportWidth, controls };
+  });
+
+  const offscreen = metrics.controls.filter((control) => control.offLeft > 0 || control.offRight > 0);
+  expect(offscreen).toEqual([]);
+
+  if (metrics.viewportWidth < 600) {
+    const tooSmall = metrics.controls.filter((control) => control.width < 44 || control.height < 44);
+    expect(tooSmall).toEqual([]);
+  }
+};
+
 const createSampleWebm = async (page: Page): Promise<Buffer> => {
   const bytes = await page.evaluate(async () => {
     const canvas = document.createElement("canvas");
@@ -120,6 +152,33 @@ test("keeps the drop zone stable on pointer hover", async ({ page }) => {
   await guards.assertClean();
 });
 
+test("shows the drop zone focus ring when the file input receives keyboard focus", async ({ page }) => {
+  const guards = installPageGuards(page);
+  const dropZone = page.getByTestId("drop-zone");
+  const fileInput = page.locator('input[type="file"]');
+
+  let fileInputFocused = false;
+  for (let pressCount = 0; pressCount < 8; pressCount += 1) {
+    await page.keyboard.press("Tab");
+    fileInputFocused = await fileInput.evaluate((input) => input === document.activeElement);
+    if (fileInputFocused) break;
+  }
+
+  expect(fileInputFocused).toBe(true);
+
+  const focusStyle = await dropZone.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      borderColor: style.borderColor,
+      boxShadow: style.boxShadow,
+    };
+  });
+
+  expect(focusStyle.boxShadow).not.toBe("none");
+
+  await guards.assertClean();
+});
+
 test("opens the file picker from the drop-zone copy and compacts after upload", async ({ page }) => {
   const guards = installPageGuards(page);
   const dropZone = page.getByTestId("drop-zone");
@@ -138,6 +197,7 @@ test("opens the file picker from the drop-zone copy and compacts after upload", 
 
   await expect(page.getByAltText("dropzone-click.png")).toBeVisible();
   await expect(dropZone).toHaveAttribute("data-compact", "true");
+  await expectFileCardActionsToFit(page);
 
   await expect
     .poll(async () => (await dropZone.boundingBox())?.height ?? 0, {

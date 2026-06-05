@@ -28,7 +28,7 @@ export const FormatSelector = ({ fileType, currentFormat, onChange, disabled }: 
     >
       <SelectTrigger
         aria-label="Zielformat"
-        className="h-8 w-[70px] px-2 text-xs bg-secondary/50 border-0 hover:bg-secondary"
+        className="h-11 w-[74px] border-0 bg-secondary/50 px-2 text-xs hover:bg-secondary sm:h-8 sm:w-[70px]"
       >
         <SelectValue>
           <span className="font-mono">.{extension}</span>
