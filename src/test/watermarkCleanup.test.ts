@@ -34,14 +34,10 @@ describe("createWatermarkCleanupPlan", () => {
     }
   });
 
-  it("copies replacement pixels from above each watermark region", () => {
+  it("uses local diffusion inpainting for masked regions", () => {
     const plan = createWatermarkCleanupPlan({ width: 800, height: 600 });
 
-    for (const item of plan.regions) {
-      expect(item.source.y).toBeLessThan(item.y);
-      expect(item.source.width).toBe(item.width);
-      expect(item.source.height).toBe(item.height);
-    }
+    expect(plan.repairMethod).toBe("local-diffusion-inpaint");
   });
 
   it("describes the cleanup as degraded local repair with original preservation", () => {
@@ -52,12 +48,12 @@ describe("createWatermarkCleanupPlan", () => {
       localProcessingOnly: true,
       preservesOriginal: true,
       requiresAuthorization: true,
-      tier: "mask-cleanup",
+      tier: "local-inpaint",
       uiLabel: "Watermark bereinigen",
     });
   });
 
-  it("uses a manually selected cleanup area instead of default corner regions", () => {
+  it("pads a manually selected cleanup area for inpainting boundary context", () => {
     const plan = createWatermarkCleanupPlan(
       { width: 1000, height: 500 },
       { x: 0.2, y: 0.25, width: 0.3, height: 0.2 },
@@ -65,11 +61,25 @@ describe("createWatermarkCleanupPlan", () => {
 
     expect(plan.regions).toHaveLength(1);
     expect(plan.regions[0]).toMatchObject({
-      x: 200,
-      y: 125,
-      width: 300,
-      height: 100,
+      x: 95,
+      y: 90,
+      width: 510,
+      height: 170,
     });
-    expect(plan.regions[0].source.y).toBeLessThan(plan.regions[0].y);
+    expect(plan.repairMethod).toBe("local-diffusion-inpaint");
+  });
+
+  it("expands tiny text-band selections enough to include surrounding watermark color", () => {
+    const plan = createWatermarkCleanupPlan(
+      { width: 96, height: 64 },
+      { x: 68 / 96, y: 43 / 64, width: 16 / 96, height: 4 / 64 },
+    );
+
+    expect(plan.regions[0]).toMatchObject({
+      x: 56,
+      y: 31,
+      width: 40,
+      height: 28,
+    });
   });
 });

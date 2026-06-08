@@ -64,6 +64,7 @@ export const useImageConverter = () => {
           // Create base canvas at target dimensions
           const { canvas, context: ctx } = createEncodingCanvas(target.width, target.height, {
             preferOffscreen: outputFormat !== "svg",
+            willReadFrequently: Boolean(removeWatermark),
           });
 
           ctx.imageSmoothingEnabled = true;

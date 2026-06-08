@@ -25,7 +25,7 @@ export type EncodingCanvasResource = {
 export const createEncodingCanvas = (
   width: number,
   height: number,
-  options: { preferOffscreen?: boolean } = {},
+  options: { preferOffscreen?: boolean; willReadFrequently?: boolean } = {},
 ): EncodingCanvasResource => {
   const canvasWidth = Math.max(1, Math.round(width));
   const canvasHeight = Math.max(1, Math.round(height));
@@ -33,7 +33,7 @@ export const createEncodingCanvas = (
 
   if (preferOffscreen && typeof OffscreenCanvas !== "undefined") {
     const canvas = new OffscreenCanvas(canvasWidth, canvasHeight);
-    const context = canvas.getContext("2d");
+    const context = canvas.getContext("2d", { willReadFrequently: options.willReadFrequently ?? false });
     if (!context) throw new Error("Failed to create canvas context");
     return { backend: "offscreen", canvas, context };
   }
@@ -41,7 +41,7 @@ export const createEncodingCanvas = (
   const canvas = document.createElement("canvas");
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
-  const context = canvas.getContext("2d");
+  const context = canvas.getContext("2d", { willReadFrequently: options.willReadFrequently ?? false });
   if (!context) throw new Error("Failed to create canvas context");
   return { backend: "dom", canvas, context };
 };

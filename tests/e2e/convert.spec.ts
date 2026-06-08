@@ -669,12 +669,12 @@ test("applies the image watermark cleanup option", async ({ page }) => {
   await expect(page.getByAltText("watermark-sample.png")).toBeVisible();
   await page.getByRole("button", { name: "Qualitätseinstellungen" }).click();
   await expect(page.getByText(/Nur für eigene Bilder/)).toBeVisible();
-  await expect(page.getByText(/keine echte Inpainting-Garantie/)).toBeVisible();
+  await expect(page.getByText(/keine vollständige Entfernungsgarantie/)).toBeVisible();
   await page.getByLabel("Watermark bereinigen").click();
   await expect(page.getByLabel("Watermark bereinigen")).toHaveAttribute("aria-checked", "true");
   await page.getByRole("button", { name: "Bereich wählen" }).click();
   await expect(page.getByRole("dialog")).toContainText("Bereich bereinigen");
-  await expect(page.getByRole("dialog")).toContainText(/keine Inpainting-Garantie/);
+  await expect(page.getByRole("dialog")).toContainText(/ohne vollständige Entfernungsgarantie/);
   await page.getByRole("button", { name: "Bereich verwenden" }).click();
   await expect(page.getByText(/Bereinigungsbereich/)).toBeVisible();
 
@@ -699,8 +699,9 @@ test("applies the image watermark cleanup option", async ({ page }) => {
     return { blue, green, red };
   });
 
-  expect(cleanedPixel.red).toBeLessThan(190);
   expect(cleanedPixel.green).toBeGreaterThan(100);
+  expect(cleanedPixel.blue).toBeGreaterThan(80);
+  expect(cleanedPixel.red - cleanedPixel.green).toBeLessThan(120);
 
   await guards.assertClean();
 });

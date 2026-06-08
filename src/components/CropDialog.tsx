@@ -337,7 +337,7 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
           <div className="space-y-3">
             {isCleanupMode ? (
               <div className="rounded-lg border border-border bg-secondary/30 p-3 text-sm text-muted-foreground">
-                Markiere nur eigene oder autorisierte Inhalte. Die Bereinigung kopiert lokale Hintergrundpixel und ist keine Inpainting-Garantie.
+                Markiere nur eigene oder autorisierte Inhalte. Die lokale Inpainting-Stufe rekonstruiert maskierte Pixel aus der Umgebung, ohne vollständige Entfernungsgarantie.
               </div>
             ) : (
               <ResizeControls

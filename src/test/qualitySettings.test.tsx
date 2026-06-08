@@ -26,7 +26,7 @@ describe("QualitySettings", () => {
     expect(await screen.findByLabelText("Hintergrund lokal entfernen")).toBeInTheDocument();
     expect(screen.getByLabelText("Watermark bereinigen")).toBeInTheDocument();
     expect(screen.getByText(/Nur für eigene Bilder/i)).toBeInTheDocument();
-    expect(screen.getByText(/keine echte Inpainting-Garantie/i)).toBeInTheDocument();
+    expect(screen.getByText(/keine vollständige Entfernungsgarantie/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Bereich wählen" }));
     expect(onCleanupAreaClick).toHaveBeenCalledTimes(1);
   });

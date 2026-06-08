@@ -1,7 +1,7 @@
 import type { DeviceTier } from "@/lib/localProcessingEngine";
 
 export type LocalRemovalTarget = "background" | "static-corner-watermark" | "moving-logo";
-export type LocalRemovalTier = "background-model" | "mask-cleanup" | "smart-crop" | "manual-export";
+export type LocalRemovalTier = "background-model" | "local-inpaint" | "mask-cleanup" | "smart-crop" | "manual-export";
 export type LocalRemovalCapability = "ready" | "degraded" | "unsupported";
 export type LocalRemovalExpectedOutcome = "pass" | "degraded" | "fail";
 
@@ -81,16 +81,16 @@ export function createLocalRemovalPlan(input: LocalRemovalPlanInput): LocalRemov
 
   return basePlan({
     target: input.target,
-    tier: lowResolution ? "smart-crop" : "mask-cleanup",
+    tier: lowResolution ? "smart-crop" : "local-inpaint",
     capability: "degraded",
     expectedOutcome: "degraded",
     uiLabel: "Watermark bereinigen",
-    uiDescription: "Lokale Ecken-Bereinigung, keine echte Inpainting-Garantie.",
+    uiDescription: "Lokale Masken-Inpainting-Stufe, keine vollständige Entfernungsgarantie.",
     limitations: [
       "Keine Garantie für vollständige Entfernung.",
       lowResolution
         ? "Sehr kleine Bilder werden nur grob bereinigt."
-        : "Die aktuelle Maske kopiert und glättet passende Hintergrundpixel.",
+        : "Maskierte Bildbereiche werden lokal aus umliegenden Pixeln rekonstruiert.",
     ],
   });
 }

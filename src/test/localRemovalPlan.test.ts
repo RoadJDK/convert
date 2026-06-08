@@ -16,7 +16,7 @@ describe("createLocalRemovalPlan", () => {
       preservesOriginal: true,
       requiresAuthorization: true,
       target: "static-corner-watermark",
-      tier: "mask-cleanup",
+      tier: "local-inpaint",
       uiLabel: "Watermark bereinigen",
     });
     expect(plan.limitations.join(" ")).toMatch(/keine Garantie/i);

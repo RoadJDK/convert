@@ -1,4 +1,5 @@
-import { createEncodingCanvas, type EncodingCanvas } from "@/lib/imageEncoding";
+import type { EncodingCanvas } from "@/lib/imageEncoding";
+import { createRectangularInpaintingMask, inpaintMaskedPixels } from "@/lib/localInpainting";
 import { createLocalRemovalPlan, type LocalRemovalPlan } from "@/lib/localRemovalPlan";
 import type { CropArea } from "@/types/converter";
 import { resolveCropAreaToSourcePixels } from "@/lib/cropMath";
@@ -13,13 +14,11 @@ export interface PixelRect extends ImageSize {
   y: number;
 }
 
-export interface WatermarkCleanupRegion extends PixelRect {
-  source: PixelRect;
-}
+export type WatermarkCleanupRegion = PixelRect;
 
 export interface WatermarkCleanupPlan {
   regions: WatermarkCleanupRegion[];
-  blurRadius: number;
+  repairMethod: "local-diffusion-inpaint";
   removal: LocalRemovalPlan;
 }
 
@@ -48,40 +47,23 @@ const createRegion = (
     height: regionHeight,
   };
 
-  const verticalShift = Math.max(regionHeight, Math.round(size.height * 0.2));
-  const sourceY = clamp(target.y - verticalShift, 0, Math.max(0, size.height - regionHeight));
-
-  return {
-    ...target,
-    source: {
-      x: target.x,
-      y: sourceY,
-      width: target.width,
-      height: target.height,
-    },
-  };
+  return target;
 };
 
 const createManualRegion = (size: ImageSize, manualArea: CropArea): WatermarkCleanupRegion => {
   const target = resolveCropAreaToSourcePixels(manualArea, size);
-  const verticalShift = Math.max(target.height, Math.round(size.height * 0.16));
-  const shiftedUpY = target.y - verticalShift;
-  const shiftedDownY = target.y + verticalShift;
-  const sourceY = shiftedUpY >= 0
-    ? shiftedUpY
-    : clamp(shiftedDownY, 0, Math.max(0, size.height - target.height));
+  const paddingX = Math.max(12, Math.round(target.width * 0.35));
+  const paddingY = Math.max(12, Math.round(target.height * 0.35));
+  const left = clamp(target.x - paddingX, 0, Math.max(0, size.width - 1));
+  const top = clamp(target.y - paddingY, 0, Math.max(0, size.height - 1));
+  const right = clamp(target.x + target.width + paddingX, left + 1, size.width);
+  const bottom = clamp(target.y + target.height + paddingY, top + 1, size.height);
 
   return {
-    x: target.x,
-    y: target.y,
-    width: target.width,
-    height: target.height,
-    source: {
-      x: target.x,
-      y: sourceY,
-      width: target.width,
-      height: target.height,
-    },
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
   };
 };
 
@@ -107,7 +89,7 @@ export const createWatermarkCleanupPlan = (size: ImageSize, manualArea?: CropAre
       ];
 
   return {
-    blurRadius: clamp(Math.round(Math.min(safeWidth, safeHeight) * 0.012), 2, 10),
+    repairMethod: "local-diffusion-inpaint",
     removal: createLocalRemovalPlan({
       target: "static-corner-watermark",
       width: safeWidth,
@@ -123,9 +105,6 @@ export const applyWatermarkCleanup = (canvas: EncodingCanvas, manualArea?: CropA
     throw new Error("Failed to create canvas context");
   }
 
-  const { canvas: snapshot, context: snapshotCtx } = createEncodingCanvas(canvas.width, canvas.height);
-  snapshotCtx.drawImage(canvas, 0, 0);
-
   const plan = createWatermarkCleanupPlan(
     {
       width: canvas.width,
@@ -133,44 +112,13 @@ export const applyWatermarkCleanup = (canvas: EncodingCanvas, manualArea?: CropA
     },
     manualArea,
   );
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const mask = createRectangularInpaintingMask(
+    { width: canvas.width, height: canvas.height },
+    plan.regions,
+  );
+  const result = inpaintMaskedPixels(imageData, mask);
 
-  for (const region of plan.regions) {
-    ctx.save();
-    ctx.beginPath();
-    if (typeof ctx.roundRect === "function") {
-      ctx.roundRect(region.x, region.y, region.width, region.height, 4);
-    } else {
-      ctx.rect(region.x, region.y, region.width, region.height);
-    }
-    ctx.clip();
-
-    ctx.filter = `blur(${plan.blurRadius}px)`;
-    ctx.drawImage(
-      snapshot,
-      region.source.x,
-      region.source.y,
-      region.source.width,
-      region.source.height,
-      region.x,
-      region.y,
-      region.width,
-      region.height,
-    );
-
-    ctx.filter = "none";
-    ctx.globalAlpha = 0.18;
-    ctx.drawImage(
-      snapshot,
-      region.source.x,
-      region.source.y,
-      region.source.width,
-      region.source.height,
-      region.x,
-      region.y,
-      region.width,
-      region.height,
-    );
-
-    ctx.restore();
-  }
+  imageData.data.set(result.image.data);
+  ctx.putImageData(imageData, 0, 0);
 };
