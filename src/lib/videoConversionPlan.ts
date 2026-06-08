@@ -1,4 +1,5 @@
 import type { CropArea, TrimRange, VideoOutputFormat } from "@/types/converter";
+import { resolveCropAreaToSourcePixels } from "@/lib/cropMath";
 
 type VideoContainer = "webm" | "mp4";
 type VideoCodec = "vp8" | "h264";
@@ -68,12 +69,14 @@ export function resolveVideoRenderPlan(options: ResolveVideoRenderPlanOptions): 
   const videoHeight = Math.max(2, Math.round(options.videoHeight));
   const duration = Number.isFinite(options.duration) && options.duration > 0 ? options.duration : 0;
 
-  const requestedX = options.cropArea?.x ?? 0;
-  const requestedY = options.cropArea?.y ?? 0;
-  const x = clamp(Math.round(requestedX), 0, videoWidth - 2);
-  const y = clamp(Math.round(requestedY), 0, videoHeight - 2);
-  const width = clamp(Math.round(options.cropArea?.width ?? videoWidth), 2, videoWidth - x);
-  const height = clamp(Math.round(options.cropArea?.height ?? videoHeight), 2, videoHeight - y);
+  const crop = resolveCropAreaToSourcePixels(options.cropArea, {
+    width: videoWidth,
+    height: videoHeight,
+  });
+  const x = clamp(crop.x, 0, videoWidth - 2);
+  const y = clamp(crop.y, 0, videoHeight - 2);
+  const width = clamp(crop.width, 2, videoWidth - x);
+  const height = clamp(crop.height, 2, videoHeight - y);
 
   const scale = clamp((options.scale ?? 100) / 100, 0.01, 4);
   const baseWidth = options.dimensions?.width ?? width;

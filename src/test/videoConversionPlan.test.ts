@@ -41,7 +41,7 @@ describe("video conversion plan", () => {
       videoWidth: 1280,
       videoHeight: 720,
       duration: 10,
-      cropArea: { x: -25, y: 10, width: 2000, height: 719 },
+      cropArea: { x: -0.02, y: 10 / 720, width: 2, height: 719 / 720 },
       dimensions: { width: 101, height: 99 },
       scale: 100,
       trimRange: { start: 9, end: 4 },

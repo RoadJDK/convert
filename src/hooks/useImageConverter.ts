@@ -4,6 +4,7 @@ import {
   canvasToBlobWithFormat,
   compressLossyToMaxSize,
   compressPngToMaxSize,
+  createEncodingCanvas,
   displayedToAvifQuality,
   displayedToJpegQuality,
   displayedToPngScale,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/imageEncoding";
 import { applyWatermarkCleanup } from "@/lib/watermarkCleanup";
 import { readDisplayableImageAsDataUrl } from "@/lib/displayableImage";
+import { resolveImageRenderPlan } from "@/lib/imageRenderPlan";
 
 interface ConversionResult {
   blob: Blob;
@@ -45,36 +47,19 @@ export const useImageConverter = () => {
           const { qualitySettings, cropArea, dimensions, addWhiteBackground, removeWatermark } = options;
           const outputFormat = (qualitySettings.outputFormat as ImageOutputFormat) || "webp";
 
-          // Calculate source dimensions (for cropping)
-          const sx = cropArea?.x ?? 0;
-          const sy = cropArea?.y ?? 0;
-          const sWidth = cropArea?.width ?? img.width;
-          const sHeight = cropArea?.height ?? img.height;
-
-          // Calculate base target dimensions
-          let targetWidth = cropArea ? cropArea.width : img.width;
-          let targetHeight = cropArea ? cropArea.height : img.height;
-
-          if (dimensions) {
-            targetWidth = dimensions.width;
-            targetHeight = dimensions.height;
-          }
-
-          // Apply user scale setting (separate from quality-based scaling)
-          const userScale = qualitySettings.scale / 100;
-          targetWidth = Math.round(targetWidth * userScale);
-          targetHeight = Math.round(targetHeight * userScale);
+          const renderPlan = resolveImageRenderPlan({
+            sourceWidth: img.naturalWidth || img.width,
+            sourceHeight: img.naturalHeight || img.height,
+            cropArea,
+            dimensions,
+            scale: qualitySettings.scale,
+          });
+          const { source, target } = renderPlan;
 
           // Create base canvas at target dimensions
-          const canvas = document.createElement("canvas");
-          canvas.width = targetWidth;
-          canvas.height = targetHeight;
-
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            reject(new Error("Failed to create canvas context"));
-            return;
-          }
+          const { canvas, context: ctx } = createEncodingCanvas(target.width, target.height, {
+            preferOffscreen: outputFormat !== "svg",
+          });
 
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = "high";
@@ -82,10 +67,10 @@ export const useImageConverter = () => {
           // Add white background if needed (for transparent images going to JPEG)
           if (addWhiteBackground) {
             ctx.fillStyle = "#FFFFFF";
-            ctx.fillRect(0, 0, targetWidth, targetHeight);
+            ctx.fillRect(0, 0, target.width, target.height);
           }
 
-          ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
+          ctx.drawImage(img, source.x, source.y, source.width, source.height, 0, 0, target.width, target.height);
           if (removeWatermark) {
             applyWatermarkCleanup(canvas);
           }

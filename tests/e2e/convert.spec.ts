@@ -334,6 +334,84 @@ test("converts an image locally and records local stats", async ({ page }) => {
   await guards.assertClean();
 });
 
+test("converts PNG input to supported raster image outputs with decodable dimensions", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "codec smoke is covered once in the desktop project");
+  const guards = installPageGuards(page);
+
+  await page.evaluate(() => {
+    const win = window as Window & {
+      __convertedBlobs?: Blob[];
+      __originalCreateObjectURL?: typeof URL.createObjectURL;
+    };
+
+    if (!win.__originalCreateObjectURL) {
+      win.__originalCreateObjectURL = URL.createObjectURL.bind(URL);
+    }
+
+    win.__convertedBlobs = [];
+    URL.createObjectURL = (object: Blob | MediaSource) => {
+      if (object instanceof Blob) {
+        win.__convertedBlobs?.push(object);
+      }
+      return win.__originalCreateObjectURL?.(object) ?? "";
+    };
+  });
+
+  const formats = [
+    { value: "webp", extension: "webp", mimeType: "image/webp" },
+    { value: "jpeg", extension: "jpg", mimeType: "image/jpeg" },
+    { value: "png", extension: "png", mimeType: "image/png" },
+    { value: "avif", extension: "avif", mimeType: "image/avif" },
+  ] as const;
+
+  for (const format of formats) {
+    await page.locator('input[type="file"]').setInputFiles({
+      name: `codec-${format.value}.png`,
+      mimeType: "image/png",
+      buffer: SAMPLE_PNG,
+    });
+
+    await expect(page.getByAltText(`codec-${format.value}.png`)).toBeVisible();
+
+    if (format.value !== "webp") {
+      await page.getByLabel("Zielformat").click();
+      await page.getByRole("option", { name: new RegExp(`\\.${format.extension}`, "i") }).click();
+    }
+
+    await page.getByRole("button", { name: /^Start$/ }).click();
+    await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+
+    const metadata = await page.evaluate(async (expectedType) => {
+      const blobs = ((window as Window & { __convertedBlobs?: Blob[] }).__convertedBlobs ?? []).filter(
+        (blob) => blob.type === expectedType,
+      );
+      const blob = blobs.at(-1);
+      if (!blob) throw new Error(`Missing converted blob for ${expectedType}`);
+
+      const bitmap = await createImageBitmap(blob);
+      const result = {
+        height: bitmap.height,
+        size: blob.size,
+        type: blob.type,
+        width: bitmap.width,
+      };
+      bitmap.close();
+      return result;
+    }, format.mimeType);
+
+    expect(metadata).toMatchObject({
+      height: 64,
+      type: format.mimeType,
+      width: 64,
+    });
+    expect(metadata.size).toBeGreaterThan(0);
+
+    await page.getByRole("button", { name: "Datei entfernen" }).click();
+  }
+
+  await guards.assertClean();
+});
+
 test("applies the image watermark cleanup option", async ({ page }) => {
   const guards = installPageGuards(page);
 

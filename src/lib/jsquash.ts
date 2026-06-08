@@ -16,13 +16,18 @@ let avifModule: AvifEncoderModule | null = null;
 let oxipngReady: Promise<void> | null = null;
 
 type AvifEncodeOptions = {
-  cqLevel: number;
-  cqAlphaLevel: number;
+  quality: number;
+  qualityAlpha: number;
+  denoiseLevel: number;
+  tileRowsLog2: number;
+  tileColsLog2: number;
   speed: number;
   subsample: number;
   chromaDeltaQ: boolean;
   sharpness: number;
+  enableSharpYUV: boolean;
   tune: number;
+  bitDepth: number;
 };
 
 type AvifEncoderModule = {
@@ -98,24 +103,25 @@ export async function encodeAvifWasm(imageData: ImageData, quality0to100: number
     throw new Error("AVIF encoder not initialized");
   }
 
-  // AVIF uses cqLevel: 0-63 (0 = lossless, 63 = worst) - inverse relationship
-  // Map quality 0-100 to cqLevel 63-0
-  const cqLevel = Math.round(63 - (quality0to100 / 100) * 63);
-
-  // Encode options following @jsquash/avif defaults
+  const quality = Math.min(100, Math.max(0, Math.round(quality0to100)));
   const encodeOptions = {
-    cqLevel,
-    cqAlphaLevel: -1, // Use same quality for alpha
-    speed: 6, // 0-10, higher is faster but larger files
-    subsample: 1, // YUV420
+    quality,
+    qualityAlpha: -1,
+    denoiseLevel: 0,
+    tileRowsLog2: 0,
+    tileColsLog2: 0,
+    speed: 6,
+    subsample: 1,
     chromaDeltaQ: false,
     sharpness: 0,
-    tune: 0, // PSNR
+    enableSharpYUV: false,
+    tune: 0,
+    bitDepth: 8,
   };
 
   // Call the WASM encoder directly
   const output = avifModule.encode(
-    new Uint8Array(imageData.data.buffer),
+    new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength),
     imageData.width,
     imageData.height,
     encodeOptions

@@ -48,18 +48,59 @@ export const getAspectRatioString = (width: number, height: number): string => {
   return `${w}:${h}`;
 };
 
-export const scalePixelCrop = (
+const clamp = (value: number, min: number, max: number): number => {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(Math.max(value, min), max);
+};
+
+const normalizeFraction = (value: number): number => {
+  if (!Number.isFinite(value)) return 0;
+  return Number(value.toFixed(6));
+};
+
+export const normalizeRenderedPixelCrop = (
   crop: Pick<PixelCrop, "x" | "y" | "width" | "height">,
   rendered: Size,
-  source: Size,
 ): CropArea => {
-  const scaleX = source.width / rendered.width;
-  const scaleY = source.height / rendered.height;
+  const renderedWidth = Math.max(1, rendered.width);
+  const renderedHeight = Math.max(1, rendered.height);
+  const left = clamp(crop.x / renderedWidth, 0, 1);
+  const top = clamp(crop.y / renderedHeight, 0, 1);
+  const right = clamp((crop.x + crop.width) / renderedWidth, left, 1);
+  const bottom = clamp((crop.y + crop.height) / renderedHeight, top, 1);
 
   return {
-    x: Math.round(crop.x * scaleX),
-    y: Math.round(crop.y * scaleY),
-    width: Math.round(crop.width * scaleX),
-    height: Math.round(crop.height * scaleY),
+    x: normalizeFraction(left),
+    y: normalizeFraction(top),
+    width: normalizeFraction(right - left),
+    height: normalizeFraction(bottom - top),
   };
 };
+
+export const resolveCropAreaToSourcePixels = (cropArea: CropArea | undefined, source: Size): CropArea => {
+  const sourceWidth = Math.max(1, Math.round(source.width));
+  const sourceHeight = Math.max(1, Math.round(source.height));
+
+  if (!cropArea) {
+    return { x: 0, y: 0, width: sourceWidth, height: sourceHeight };
+  }
+
+  const left = clamp(cropArea.x, 0, 1);
+  const top = clamp(cropArea.y, 0, 1);
+  const right = clamp(cropArea.x + cropArea.width, left, 1);
+  const bottom = clamp(cropArea.y + cropArea.height, top, 1);
+
+  const x = clamp(Math.round(left * sourceWidth), 0, sourceWidth - 1);
+  const y = clamp(Math.round(top * sourceHeight), 0, sourceHeight - 1);
+  const rightPx = clamp(Math.round(right * sourceWidth), x + 1, sourceWidth);
+  const bottomPx = clamp(Math.round(bottom * sourceHeight), y + 1, sourceHeight);
+
+  return {
+    x,
+    y,
+    width: rightPx - x,
+    height: bottomPx - y,
+  };
+};
+
+export const scalePixelCrop = normalizeRenderedPixelCrop;

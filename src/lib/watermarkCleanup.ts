@@ -1,3 +1,5 @@
+import { createEncodingCanvas, type EncodingCanvas } from "@/lib/imageEncoding";
+
 export interface ImageSize {
   width: number;
   height: number;
@@ -79,20 +81,13 @@ export const createWatermarkCleanupPlan = (size: ImageSize): WatermarkCleanupPla
   };
 };
 
-export const applyWatermarkCleanup = (canvas: HTMLCanvasElement): void => {
+export const applyWatermarkCleanup = (canvas: EncodingCanvas): void => {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new Error("Failed to create canvas context");
   }
 
-  const snapshot = document.createElement("canvas");
-  snapshot.width = canvas.width;
-  snapshot.height = canvas.height;
-
-  const snapshotCtx = snapshot.getContext("2d");
-  if (!snapshotCtx) {
-    throw new Error("Failed to create canvas context");
-  }
+  const { canvas: snapshot, context: snapshotCtx } = createEncodingCanvas(canvas.width, canvas.height);
   snapshotCtx.drawImage(canvas, 0, 0);
 
   const plan = createWatermarkCleanupPlan({

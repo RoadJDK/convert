@@ -1,14 +1,59 @@
 import { getOutputMimeType, type ImageOutputFormat } from "@/types/converter";
 import { encodeAvifWasm, encodeWebpWasm, optimisePngWasm } from "@/lib/jsquash";
 
-const getImageData = (canvas: HTMLCanvasElement): ImageData => {
+export type EncodingCanvas = HTMLCanvasElement | OffscreenCanvas;
+type EncodingContext2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+type EncodingBackend = "offscreen" | "dom";
+
+type CodecEncodeOptions = {
+  format: ImageOutputFormat;
+  quality?: number;
+  oxipngLevel: number;
+};
+
+export type ImageCodecAdapter = {
+  id: "jsquash-webp" | "jsquash-avif" | "jsquash-png" | "browser-canvas" | "svg-data-url";
+  encode: (canvas: EncodingCanvas, options: CodecEncodeOptions) => Promise<Blob>;
+};
+
+export type EncodingCanvasResource = {
+  backend: EncodingBackend;
+  canvas: EncodingCanvas;
+  context: EncodingContext2D;
+};
+
+export const createEncodingCanvas = (
+  width: number,
+  height: number,
+  options: { preferOffscreen?: boolean } = {},
+): EncodingCanvasResource => {
+  const canvasWidth = Math.max(1, Math.round(width));
+  const canvasHeight = Math.max(1, Math.round(height));
+  const preferOffscreen = options.preferOffscreen ?? true;
+
+  if (preferOffscreen && typeof OffscreenCanvas !== "undefined") {
+    const canvas = new OffscreenCanvas(canvasWidth, canvasHeight);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Failed to create canvas context");
+    return { backend: "offscreen", canvas, context };
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Failed to create canvas context");
+  return { backend: "dom", canvas, context };
+};
+
+const getImageData = (canvas: EncodingCanvas): ImageData => {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Failed to get canvas context");
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 };
 
 const canvasToWebpViaWasm = async (
-  canvas: HTMLCanvasElement,
+  canvas: EncodingCanvas,
   quality: number,
 ): Promise<Blob> => {
   const imageData = getImageData(canvas);
@@ -17,7 +62,7 @@ const canvasToWebpViaWasm = async (
 };
 
 const canvasToAvifViaWasm = async (
-  canvas: HTMLCanvasElement,
+  canvas: EncodingCanvas,
   quality: number,
 ): Promise<Blob> => {
   const imageData = getImageData(canvas);
@@ -34,19 +79,39 @@ const optimisePngBuffer = async (pngBuffer: ArrayBuffer, level: number = 2): Pro
   }
 };
 
-const canvasToPngBuffer = (canvas: HTMLCanvasElement): Promise<ArrayBuffer> => {
+const canvasToBlobByBrowser = (
+  canvas: EncodingCanvas,
+  type: string,
+  quality?: number,
+): Promise<Blob> => {
+  if ("convertToBlob" in canvas && typeof canvas.convertToBlob === "function") {
+    return canvas.convertToBlob({ type, quality });
+  }
+
   return new Promise((resolve, reject) => {
-    canvas.toBlob(async (blob) => {
-      if (blob) {
-        resolve(await blob.arrayBuffer());
-      } else {
-        reject(new Error("Failed to create PNG blob"));
-      }
-    }, "image/png");
+    (canvas as HTMLCanvasElement).toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error(`Failed to create ${type} blob. Format may not be supported.`));
+        }
+      },
+      type,
+      quality,
+    );
   });
 };
 
-const canvasToSvgBlob = (canvas: HTMLCanvasElement): Blob => {
+const canvasToPngBuffer = (canvas: EncodingCanvas): Promise<ArrayBuffer> => {
+  return canvasToBlobByBrowser(canvas, "image/png").then((blob) => blob.arrayBuffer());
+};
+
+const canvasToSvgBlob = (canvas: EncodingCanvas): Blob => {
+  if (!("toDataURL" in canvas)) {
+    throw new Error("SVG export requires a DOM canvas");
+  }
+
   const imageDataUrl = canvas.toDataURL("image/png");
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}" viewBox="0 0 ${canvas.width} ${canvas.height}">`,
@@ -55,6 +120,44 @@ const canvasToSvgBlob = (canvas: HTMLCanvasElement): Blob => {
   ].join("");
 
   return new Blob([svg], { type: "image/svg+xml" });
+};
+
+const imageCodecAdapters: ImageCodecAdapter[] = [
+  {
+    id: "jsquash-webp",
+    encode: (canvas, options) => canvasToWebpViaWasm(canvas, Math.round(options.quality ?? 75)),
+  },
+  {
+    id: "jsquash-avif",
+    encode: (canvas, options) => canvasToAvifViaWasm(canvas, Math.round(options.quality ?? 50)),
+  },
+  {
+    id: "jsquash-png",
+    encode: async (canvas, options) => {
+      const pngBuffer = await canvasToPngBuffer(canvas);
+      const optimizedBuffer = await optimisePngBuffer(pngBuffer, options.oxipngLevel);
+      return new Blob([optimizedBuffer], { type: "image/png" });
+    },
+  },
+  {
+    id: "svg-data-url",
+    encode: async (canvas) => canvasToSvgBlob(canvas),
+  },
+  {
+    id: "browser-canvas",
+    encode: (canvas, options) => {
+      const mimeType = getOutputMimeType("image", options.format);
+      return canvasToBlobByBrowser(canvas, mimeType, options.quality);
+    },
+  },
+];
+
+export const getImageCodecAdapter = (format: ImageOutputFormat): ImageCodecAdapter => {
+  if (format === "webp") return imageCodecAdapters[0];
+  if (format === "avif") return imageCodecAdapters[1];
+  if (format === "png") return imageCodecAdapters[2];
+  if (format === "svg") return imageCodecAdapters[3];
+  return imageCodecAdapters[4];
 };
 
 export const displayedToWebpQuality = (displayed: number): number => {
@@ -82,13 +185,11 @@ export const displayedToAvifQuality = (displayed: number): number => {
   return Math.round(50 + ((displayed - 100) / 100) * 40);
 };
 
-export const scaleCanvas = (sourceCanvas: HTMLCanvasElement, scaleFactor: number): HTMLCanvasElement => {
-  const newCanvas = document.createElement("canvas");
-  newCanvas.width = Math.max(1, Math.round(sourceCanvas.width * scaleFactor));
-  newCanvas.height = Math.max(1, Math.round(sourceCanvas.height * scaleFactor));
-
-  const ctx = newCanvas.getContext("2d");
-  if (!ctx) throw new Error("Failed to create canvas context");
+export const scaleCanvas = (sourceCanvas: EncodingCanvas, scaleFactor: number): EncodingCanvas => {
+  const { canvas: newCanvas, context: ctx } = createEncodingCanvas(
+    sourceCanvas.width * scaleFactor,
+    sourceCanvas.height * scaleFactor,
+  );
 
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
@@ -98,55 +199,21 @@ export const scaleCanvas = (sourceCanvas: HTMLCanvasElement, scaleFactor: number
 };
 
 export const canvasToBlobWithFormat = async (
-  canvas: HTMLCanvasElement,
+  canvas: EncodingCanvas,
   targetFormat: ImageOutputFormat,
   quality?: number,
   oxipngLevel: number = 2,
 ): Promise<Blob> => {
-  if (targetFormat === "webp") {
-    const wasmQuality = quality !== undefined ? Math.round(quality) : 75;
-    console.log("[ImageConverter] WebP WASM encoding with quality:", wasmQuality);
-    return await canvasToWebpViaWasm(canvas, wasmQuality);
-  }
-
-  if (targetFormat === "avif") {
-    const wasmQuality = quality !== undefined ? Math.round(quality) : 50;
-    console.log("[ImageConverter] AVIF WASM encoding with quality:", wasmQuality);
-    return await canvasToAvifViaWasm(canvas, wasmQuality);
-  }
-
-  if (targetFormat === "png") {
-    const pngBuffer = await canvasToPngBuffer(canvas);
-    const optimizedBuffer = await optimisePngBuffer(pngBuffer, oxipngLevel);
-    return new Blob([optimizedBuffer], { type: "image/png" });
-  }
-
-  if (targetFormat === "svg") {
-    return canvasToSvgBlob(canvas);
-  }
-
-  const mimeType = getOutputMimeType("image", targetFormat);
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob);
-        } else {
-          reject(new Error(`Failed to create ${targetFormat} blob. Format may not be supported.`));
-        }
-      },
-      mimeType,
-      quality,
-    );
-  });
+  const adapter = getImageCodecAdapter(targetFormat);
+  return adapter.encode(canvas, { format: targetFormat, quality, oxipngLevel });
 };
 
 export const compressPngToMaxSize = async (
-  canvas: HTMLCanvasElement,
+  canvas: EncodingCanvas,
   targetBytes: number,
   onProgress: (progress: number) => void,
 ): Promise<Blob> => {
-  let currentCanvas = canvas;
+  let currentCanvas: EncodingCanvas = canvas;
   let scaleFactor = 1.0;
   let bestBlob: Blob | null = null;
 
@@ -191,7 +258,7 @@ export const compressPngToMaxSize = async (
 };
 
 export const compressLossyToMaxSize = async (
-  canvas: HTMLCanvasElement,
+  canvas: EncodingCanvas,
   format: ImageOutputFormat,
   targetBytes: number,
   onProgress: (progress: number) => void,

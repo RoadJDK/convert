@@ -27,6 +27,11 @@ export interface QualitySettings {
 }
 
 export interface CropArea {
+  /**
+   * Normalized source coordinates in the browser-decoded media orientation.
+   * Values are fractions in the 0..1 range, resolved to natural pixels only
+   * immediately before rendering or encoding.
+   */
   x: number;
   y: number;
   width: number;

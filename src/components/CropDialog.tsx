@@ -15,7 +15,7 @@ import { ResizeControls } from '@/components/crop-dialog/ResizeControls';
 import { VideoTrimControls } from '@/components/crop-dialog/VideoTrimControls';
 import { useResizeController } from '@/hooks/useResizeController';
 import { useVideoTrimController } from '@/hooks/useVideoTrimController';
-import { centerAspectCrop, scalePixelCrop } from '@/lib/cropMath';
+import { centerAspectCrop, normalizeRenderedPixelCrop, resolveCropAreaToSourcePixels } from '@/lib/cropMath';
 import { readDisplayableImageAsDataUrl } from '@/lib/displayableImage';
 import { CropFrameIcon } from '@/components/icons/MediaConvertIcons';
 
@@ -144,16 +144,20 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
     setCompletedCrop(c);
 
     if (file?.type === 'image' && imgRef.current) {
-      const scaledCrop = scalePixelCrop(
-        c,
-        { width: imgRef.current.width, height: imgRef.current.height },
+      const scaledCrop = resolveCropAreaToSourcePixels(
+        normalizeRenderedPixelCrop(
+          c,
+          { width: imgRef.current.width, height: imgRef.current.height },
+        ),
         { width: imgRef.current.naturalWidth, height: imgRef.current.naturalHeight },
       );
       setDimensions({ width: scaledCrop.width, height: scaledCrop.height });
     } else if (file?.type === 'video' && videoRef.current) {
-      const scaledCrop = scalePixelCrop(
-        c,
-        { width: videoRef.current.clientWidth, height: videoRef.current.clientHeight },
+      const scaledCrop = resolveCropAreaToSourcePixels(
+        normalizeRenderedPixelCrop(
+          c,
+          { width: videoRef.current.clientWidth, height: videoRef.current.clientHeight },
+        ),
         { width: videoRef.current.videoWidth, height: videoRef.current.videoHeight },
       );
       setDimensions({ width: scaledCrop.width, height: scaledCrop.height });
@@ -167,16 +171,14 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
     // Get crop area from either image or video
     if (completedCrop) {
       if (file?.type === 'image' && imgRef.current) {
-        cropArea = scalePixelCrop(
+        cropArea = normalizeRenderedPixelCrop(
           completedCrop,
           { width: imgRef.current.width, height: imgRef.current.height },
-          { width: imgRef.current.naturalWidth, height: imgRef.current.naturalHeight },
         );
       } else if (file?.type === 'video' && videoRef.current) {
-        cropArea = scalePixelCrop(
+        cropArea = normalizeRenderedPixelCrop(
           completedCrop,
           { width: videoRef.current.clientWidth, height: videoRef.current.clientHeight },
-          { width: videoRef.current.videoWidth, height: videoRef.current.videoHeight },
         );
       }
     }

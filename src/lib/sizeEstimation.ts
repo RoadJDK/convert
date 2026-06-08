@@ -1,4 +1,5 @@
 import type { CropArea, FileType } from "@/types/converter";
+import { resolveCropAreaToSourcePixels } from "@/lib/cropMath";
 
 type FormatCompressionInfo = {
   baseMultiplier: number;
@@ -106,8 +107,9 @@ function getPixelRatio(
   }
 
   const originalPixels = originalDimensions.width * originalDimensions.height;
-  const croppedWidth = cropArea?.width ?? originalDimensions.width;
-  const croppedHeight = cropArea?.height ?? originalDimensions.height;
+  const cropPixels = resolveCropAreaToSourcePixels(cropArea, originalDimensions);
+  const croppedWidth = cropPixels.width;
+  const croppedHeight = cropPixels.height;
   const outputPixels = croppedWidth * scaleFactor * croppedHeight * scaleFactor;
 
   return outputPixels / originalPixels;
