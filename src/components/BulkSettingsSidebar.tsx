@@ -21,7 +21,11 @@ interface BulkSettingsSidebarProps {
   onClose: () => void;
   onAIRenameAll?: () => void;
   isAIRenaming?: boolean;
+  onCompressPdfs?: () => void;
   onMergePdfs?: () => void;
+  onReorderPdf?: (pageOrder: string) => void;
+  onRotatePdfs?: (degrees: 90 | 180 | 270) => void;
+  onSplitPdfs?: () => void;
 }
 
 export const BulkSettingsSidebar = ({
@@ -32,11 +36,16 @@ export const BulkSettingsSidebar = ({
   onClose,
   onAIRenameAll,
   isAIRenaming,
+  onCompressPdfs,
   onMergePdfs,
+  onReorderPdf,
+  onRotatePdfs,
+  onSplitPdfs,
 }: BulkSettingsSidebarProps) => {
   const [mode, setMode] = useState<QualityMode>('percentage');
   const [percentage, setPercentage] = useState(100);
   const [maxSizeKB, setMaxSizeKB] = useState(500);
+  const [pageOrder, setPageOrder] = useState('');
 
   // Reset when sidebar opens
   useEffect(() => {
@@ -44,6 +53,7 @@ export const BulkSettingsSidebar = ({
       setMode('percentage');
       setPercentage(100);
       setMaxSizeKB(500);
+      setPageOrder('');
     }
   }, [open]);
 
@@ -119,6 +129,61 @@ export const BulkSettingsSidebar = ({
               <BatchFilesIcon className="h-4 w-4" />
               PDFs zusammenführen
             </Button>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={onSplitPdfs}
+                disabled={!onSplitPdfs}
+              >
+                <BatchFilesIcon className="h-4 w-4" />
+                Seiten aufteilen
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={() => onRotatePdfs?.(90)}
+                disabled={!onRotatePdfs}
+              >
+                90° drehen
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2 sm:col-span-2"
+                onClick={onCompressPdfs}
+                disabled={!onCompressPdfs}
+              >
+                PDFs komprimieren
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pdf-page-order">Seitenfolge</Label>
+              <div className="grid gap-2">
+                <Input
+                  id="pdf-page-order"
+                  value={pageOrder}
+                  onChange={(event) => setPageOrder(event.target.value)}
+                  placeholder="z.B. 3,1,2"
+                  disabled={selectedCount !== 1 || !onReorderPdf}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onReorderPdf?.(pageOrder)}
+                  disabled={selectedCount !== 1 || !pageOrder.trim() || !onReorderPdf}
+                >
+                  Seiten neu sortieren
+                </Button>
+              </div>
+              {selectedCount !== 1 && (
+                <p className="text-xs text-muted-foreground">
+                  Neu sortieren ist pro einzelner PDF-Datei verfügbar.
+                </p>
+              )}
+            </div>
           </div>
         )}
 

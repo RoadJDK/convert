@@ -45,13 +45,18 @@ const createCornerWatermarkPng = async (page: Page): Promise<Buffer> => {
   return Buffer.from(bytes);
 };
 
-const createPdfFixture = async (name: string, pageCount: number, title: string): Promise<Buffer> => {
+const createPdfFixture = async (
+  name: string,
+  pageCount: number,
+  title: string,
+  pageSizes: Array<[number, number]> = [],
+): Promise<Buffer> => {
   const pdf = await PDFDocument.create();
   pdf.setTitle(title);
   pdf.setAuthor("Private Author");
 
   for (let index = 0; index < pageCount; index += 1) {
-    const page = pdf.addPage([240, 160]);
+    const page = pdf.addPage(pageSizes[index] ?? [240, 160]);
     page.drawText(`${name} page ${index + 1}`, {
       color: rgb(0.12, 0.18, 0.24),
       size: 14,
@@ -645,6 +650,62 @@ test("merges selected PDFs locally without upload", async ({ page }) => {
   const output = await PDFDocument.load(await readLastConvertedPdfBytes(page));
   expect(output.getPageCount()).toBe(3);
   expect(output.getTitle()).toBe("Maibach Convert PDF");
+  expect(output.getAuthor()).toBe("Maibach Convert");
+  expect(writeRequests).toEqual([]);
+
+  await guards.assertClean();
+});
+
+test("runs single PDF page tools locally without upload", async ({ page }) => {
+  const guards = installPageGuards(page);
+  const writeRequests: string[] = [];
+  page.on("request", (request) => {
+    if (["POST", "PUT", "PATCH"].includes(request.method())) {
+      writeRequests.push(`${request.method()} ${request.url()}`);
+    }
+  });
+  await installConvertedPdfBlobCapture(page);
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "tools.pdf",
+    mimeType: "application/pdf",
+    buffer: await createPdfFixture("tools", 3, "Private Tools", [
+      [200, 120],
+      [240, 140],
+      [280, 160],
+    ]),
+  });
+
+  await expect(page.locator('[title="tools.pdf"]')).toBeVisible();
+
+  await page.getByRole("checkbox").first().click();
+  await page.getByLabel("Seitenfolge").fill("3,1");
+  await page.getByRole("button", { name: "Seiten neu sortieren" }).click();
+  await expect(page.locator('[title="tools-reordered.pdf"]')).toBeVisible();
+  let output = await PDFDocument.load(await readLastConvertedPdfBytes(page));
+  expect(output.getPageCount()).toBe(2);
+  expect(output.getPages()[0].getWidth()).toBe(280);
+  expect(output.getPages()[1].getWidth()).toBe(200);
+
+  await page.getByRole("checkbox").first().click();
+  await page.getByRole("button", { name: "Seiten aufteilen" }).click();
+  await expect(page.locator('[title="tools-page-1.pdf"]')).toBeVisible();
+  await expect(page.locator('[title="tools-page-2.pdf"]')).toBeVisible();
+  await expect(page.locator('[title="tools-page-3.pdf"]')).toBeVisible();
+  output = await PDFDocument.load(await readLastConvertedPdfBytes(page));
+  expect(output.getPageCount()).toBe(1);
+
+  await page.getByRole("checkbox").first().click();
+  await page.getByRole("button", { name: "90° drehen" }).click();
+  await expect(page.locator('[title="tools-rotated-90.pdf"]')).toBeVisible();
+  output = await PDFDocument.load(await readLastConvertedPdfBytes(page));
+  expect(output.getPages().map((pdfPage) => pdfPage.getRotation().angle)).toEqual([90, 90, 90]);
+
+  await page.getByRole("checkbox").first().click();
+  await page.getByRole("button", { name: "PDFs komprimieren" }).click();
+  await expect(page.locator('[title="tools-compressed.pdf"]')).toBeVisible();
+  output = await PDFDocument.load(await readLastConvertedPdfBytes(page));
+  expect(output.getPageCount()).toBe(3);
   expect(output.getAuthor()).toBe("Maibach Convert");
   expect(writeRequests).toEqual([]);
 

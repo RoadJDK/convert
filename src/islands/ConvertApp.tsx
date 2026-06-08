@@ -11,9 +11,34 @@ import { useFileConverter } from '@/hooks/useFileConverter';
 import { useAIRename } from '@/hooks/useAIRename';
 import { CleanupMask, ConvertibleFile, CropArea, QualitySettings, TrimRange, FileType, VideoRotation } from '@/types/converter';
 import { runLimitedConcurrency } from '@/lib/conversionQueue';
-import { mergePdfFiles } from '@/lib/pdfOperations';
+import {
+  compressPdfFile,
+  mergePdfFiles,
+  reorderPdfFile,
+  rotatePdfFile,
+  splitPdfFile,
+  type PdfRotationDegrees,
+} from '@/lib/pdfOperations';
 
 const LOCAL_CONVERSION_CONCURRENCY = 2;
+
+const getPdfBaseName = (file: ConvertibleFile): string => {
+  return (file.suggestedName || file.originalName.replace(/\.[^/.]+$/, '')).trim() || 'document';
+};
+
+const parsePdfPageOrder = (value: string): number[] => {
+  const pageNumbers = value
+    .split(/[,\s]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => Number(part));
+
+  if (pageNumbers.length === 0 || pageNumbers.some((pageNumber) => !Number.isInteger(pageNumber) || pageNumber < 1)) {
+    throw new Error('Seitenfolge muss Seitenzahlen wie 3,1,2 enthalten.');
+  }
+
+  return pageNumbers.map((pageNumber) => pageNumber - 1);
+};
 
 const Index = () => {
   const { 
@@ -50,6 +75,11 @@ const Index = () => {
     const firstSelected = pendingFiles.find(f => selectedPendingIds.includes(f.id));
     return firstSelected?.type || null;
   }, [selectedPendingIds, pendingFiles]);
+
+  const selectedPdfFiles = useMemo(
+    () => pendingFiles.filter((file) => selectedPendingIds.includes(file.id) && file.type === 'pdf'),
+    [pendingFiles, selectedPendingIds],
+  );
 
   const handleFilesAdded = useCallback(
     (newFiles: File[]) => {
@@ -169,33 +199,91 @@ const Index = () => {
     }
   }, [pendingFiles, selectedPendingIds, handleAIRename]);
 
+  const addCompletedPdfResult = useCallback((blob: Blob, suggestedName: string) => {
+    const pdfFile = new File([blob], `${suggestedName}.pdf`, { type: 'application/pdf' });
+    const [createdFile] = addFiles([pdfFile]);
+    if (!createdFile) return;
+
+    updateFile(createdFile.id, {
+      status: 'completed',
+      progress: 100,
+      convertedBlob: blob,
+      convertedUrl: URL.createObjectURL(blob),
+      convertedSize: blob.size,
+      suggestedName,
+    });
+  }, [addFiles, updateFile]);
+
   const handleMergeSelectedPdfs = useCallback(async () => {
-    const filesToMerge = pendingFiles.filter((file) => selectedPendingIds.includes(file.id) && file.type === 'pdf');
-    if (filesToMerge.length < 2) return;
+    if (selectedPdfFiles.length < 2) return;
 
     try {
-      const mergedBlob = await mergePdfFiles(filesToMerge.map((file) => file.file));
-      const mergedBaseName = `merged-${filesToMerge.length}-pdfs`;
-      const mergedFile = new File([mergedBlob], `${mergedBaseName}.pdf`, { type: 'application/pdf' });
-      const [createdFile] = addFiles([mergedFile]);
-      if (createdFile) {
-        updateFile(createdFile.id, {
-          status: 'completed',
-          progress: 100,
-          convertedBlob: mergedBlob,
-          convertedUrl: URL.createObjectURL(mergedBlob),
-          convertedSize: mergedBlob.size,
-          suggestedName: mergedBaseName,
-        });
-      }
+      const mergedBlob = await mergePdfFiles(selectedPdfFiles.map((file) => file.file));
+      addCompletedPdfResult(mergedBlob, `merged-${selectedPdfFiles.length}-pdfs`);
       setSelectedIds([]);
     } catch (error) {
-      updateFile(filesToMerge[0].id, {
+      updateFile(selectedPdfFiles[0].id, {
         status: 'error',
         error: error instanceof Error ? error.message : 'PDFs konnten nicht lokal zusammengeführt werden.',
       });
     }
-  }, [addFiles, pendingFiles, selectedPendingIds, updateFile]);
+  }, [addCompletedPdfResult, selectedPdfFiles, updateFile]);
+
+  const handlePdfOperationError = useCallback((file: ConvertibleFile, error: unknown, fallback: string) => {
+    updateFile(file.id, {
+      status: 'error',
+      error: error instanceof Error ? error.message : fallback,
+    });
+  }, [updateFile]);
+
+  const handleSplitSelectedPdfs = useCallback(async () => {
+    for (const file of selectedPdfFiles) {
+      try {
+        const pages = await splitPdfFile(file.file);
+        pages.forEach((page) => addCompletedPdfResult(page.blob, page.suggestedName));
+      } catch (error) {
+        handlePdfOperationError(file, error, 'PDF konnte nicht lokal aufgeteilt werden.');
+      }
+    }
+    setSelectedIds([]);
+  }, [addCompletedPdfResult, handlePdfOperationError, selectedPdfFiles]);
+
+  const handleRotateSelectedPdfs = useCallback(async (rotation: PdfRotationDegrees) => {
+    for (const file of selectedPdfFiles) {
+      try {
+        const rotated = await rotatePdfFile(file.file, rotation);
+        addCompletedPdfResult(rotated, `${getPdfBaseName(file)}-rotated-${rotation}`);
+      } catch (error) {
+        handlePdfOperationError(file, error, 'PDF konnte nicht lokal gedreht werden.');
+      }
+    }
+    setSelectedIds([]);
+  }, [addCompletedPdfResult, handlePdfOperationError, selectedPdfFiles]);
+
+  const handleCompressSelectedPdfs = useCallback(async () => {
+    for (const file of selectedPdfFiles) {
+      try {
+        const compressed = await compressPdfFile(file.file);
+        addCompletedPdfResult(compressed, `${getPdfBaseName(file)}-compressed`);
+      } catch (error) {
+        handlePdfOperationError(file, error, 'PDF konnte nicht lokal komprimiert werden.');
+      }
+    }
+    setSelectedIds([]);
+  }, [addCompletedPdfResult, handlePdfOperationError, selectedPdfFiles]);
+
+  const handleReorderSelectedPdf = useCallback(async (pageOrder: string) => {
+    const [file] = selectedPdfFiles;
+    if (!file) return;
+
+    try {
+      const reordered = await reorderPdfFile(file.file, parsePdfPageOrder(pageOrder));
+      addCompletedPdfResult(reordered, `${getPdfBaseName(file)}-reordered`);
+      setSelectedIds([]);
+    } catch (error) {
+      handlePdfOperationError(file, error, 'PDF konnte nicht lokal neu sortiert werden.');
+    }
+  }, [addCompletedPdfResult, handlePdfOperationError, selectedPdfFiles]);
 
   const handleToggleRemoveBackground = useCallback((fileId: string, enabled: boolean) => {
     updateFile(fileId, { removeBackground: enabled });
@@ -226,7 +314,11 @@ const Index = () => {
             onClose={handleClearSelection}
             onAIRenameAll={selectedFileType === 'pdf' ? undefined : handleAIRenameSelected}
             isAIRenaming={isAnyAIRenaming}
+            onCompressPdfs={handleCompressSelectedPdfs}
             onMergePdfs={handleMergeSelectedPdfs}
+            onReorderPdf={handleReorderSelectedPdf}
+            onRotatePdfs={handleRotateSelectedPdfs}
+            onSplitPdfs={handleSplitSelectedPdfs}
           />
 
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
