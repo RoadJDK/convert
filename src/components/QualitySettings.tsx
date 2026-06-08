@@ -14,6 +14,7 @@ import {
   CropArea,
 } from '@/types/converter';
 import { estimateConvertedFileSize } from '@/lib/sizeEstimation';
+import { createLocalRemovalPlan } from '@/lib/localRemovalPlan';
 import {
   EraserMaskIcon,
   MaxSizeIcon,
@@ -54,6 +55,8 @@ export const QualitySettings = ({
   const [open, setOpen] = useState(false);
   const backgroundRemovalId = useId();
   const watermarkRemovalId = useId();
+  const backgroundRemovalDescriptionId = useId();
+  const watermarkRemovalDescriptionId = useId();
 
   const handleModeChange = (mode: string) => {
     onChange({ ...settings, mode: mode as QualityMode });
@@ -87,6 +90,17 @@ export const QualitySettings = ({
   // Get format options based on file type
   const defaultFormat = fileType === 'image' ? 'webp' : 'webm';
   const currentFormat = settings.outputFormat || defaultFormat;
+  const removalDimensions = originalDimensions ?? { width: 1024, height: 768 };
+  const backgroundRemovalPlan = useMemo(() => createLocalRemovalPlan({
+    target: 'background',
+    width: removalDimensions.width,
+    height: removalDimensions.height,
+  }), [removalDimensions.height, removalDimensions.width]);
+  const watermarkRemovalPlan = useMemo(() => createLocalRemovalPlan({
+    target: 'static-corner-watermark',
+    width: removalDimensions.width,
+    height: removalDimensions.height,
+  }), [removalDimensions.height, removalDimensions.width]);
 
   // Estimate file size based on quality, format, dimensions, and crop
   const estimatedSize = useMemo(() => {
@@ -123,30 +137,49 @@ export const QualitySettings = ({
 
           {fileType === 'image' && (onRemoveBackgroundChange || onRemoveWatermarkChange) && (
             <div className="space-y-2 rounded-lg border border-border bg-secondary/30 p-3">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Nur für eigene Bilder. Alles läuft lokal; das Original bleibt unverändert.
+              </p>
               {onRemoveBackgroundChange && (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <EraserMaskIcon className="h-4 w-4 text-muted-foreground" />
-                    <Label htmlFor={backgroundRemovalId} className="text-xs font-medium">Hintergrund entfernen</Label>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <EraserMaskIcon className="h-4 w-4 text-muted-foreground" />
+                      <Label htmlFor={backgroundRemovalId} className="text-xs font-medium">
+                        {backgroundRemovalPlan.uiLabel}
+                      </Label>
+                    </div>
+                    <Switch
+                      id={backgroundRemovalId}
+                      aria-describedby={backgroundRemovalDescriptionId}
+                      checked={removeBackground ?? false}
+                      onCheckedChange={onRemoveBackgroundChange}
+                    />
                   </div>
-                  <Switch
-                    id={backgroundRemovalId}
-                    checked={removeBackground ?? false}
-                    onCheckedChange={onRemoveBackgroundChange}
-                  />
+                  <p id={backgroundRemovalDescriptionId} className="text-xs leading-relaxed text-muted-foreground">
+                    {backgroundRemovalPlan.uiDescription}
+                  </p>
                 </div>
               )}
               {onRemoveWatermarkChange && (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <WatermarkCleanIcon className="h-4 w-4 text-muted-foreground" />
-                    <Label htmlFor={watermarkRemovalId} className="text-xs font-medium">Watermark entfernen</Label>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <WatermarkCleanIcon className="h-4 w-4 text-muted-foreground" />
+                      <Label htmlFor={watermarkRemovalId} className="text-xs font-medium">
+                        {watermarkRemovalPlan.uiLabel}
+                      </Label>
+                    </div>
+                    <Switch
+                      id={watermarkRemovalId}
+                      aria-describedby={watermarkRemovalDescriptionId}
+                      checked={removeWatermark ?? false}
+                      onCheckedChange={onRemoveWatermarkChange}
+                    />
                   </div>
-                  <Switch
-                    id={watermarkRemovalId}
-                    checked={removeWatermark ?? false}
-                    onCheckedChange={onRemoveWatermarkChange}
-                  />
+                  <p id={watermarkRemovalDescriptionId} className="text-xs leading-relaxed text-muted-foreground">
+                    {watermarkRemovalPlan.uiDescription}
+                  </p>
                 </div>
               )}
             </div>

@@ -43,4 +43,17 @@ describe("createWatermarkCleanupPlan", () => {
       expect(item.source.height).toBe(item.height);
     }
   });
+
+  it("describes the cleanup as degraded local repair with original preservation", () => {
+    const plan = createWatermarkCleanupPlan({ width: 800, height: 600 });
+
+    expect(plan.removal).toMatchObject({
+      capability: "degraded",
+      localProcessingOnly: true,
+      preservesOriginal: true,
+      requiresAuthorization: true,
+      tier: "mask-cleanup",
+      uiLabel: "Watermark bereinigen",
+    });
+  });
 });

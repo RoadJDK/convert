@@ -11,6 +11,39 @@ const CROP_SAMPLE_PNG = Buffer.from(
   "base64",
 );
 
+const createCornerWatermarkPng = async (page: Page): Promise<Buffer> => {
+  const bytes = await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 96;
+    canvas.height = 64;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas unavailable");
+
+    const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, "#275f73");
+    gradient.addColorStop(1, "#d7c68a");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    context.fillStyle = "#e1122f";
+    context.fillRect(4, 36, 32, 22);
+    context.fillRect(60, 36, 32, 22);
+    context.fillStyle = "#ffffff";
+    context.fillRect(12, 43, 16, 4);
+    context.fillRect(68, 43, 16, 4);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (result) resolve(result);
+        else reject(new Error("PNG encoding failed"));
+      }, "image/png");
+    });
+    return Array.from(new Uint8Array(await blob.arrayBuffer()));
+  });
+
+  return Buffer.from(bytes);
+};
+
 const toEvenDimension = (value: number) => {
   const rounded = Math.max(2, Math.round(value));
   return rounded % 2 === 0 ? rounded : rounded + 1;
@@ -606,21 +639,64 @@ test("converts PNG input to supported raster image outputs with decodable dimens
 
 test("applies the image watermark cleanup option", async ({ page }) => {
   const guards = installPageGuards(page);
+  await page.evaluate(() => {
+    const win = window as Window & {
+      __convertedBlobs?: Blob[];
+      __originalCreateObjectURL?: typeof URL.createObjectURL;
+    };
+
+    if (!win.__originalCreateObjectURL) {
+      win.__originalCreateObjectURL = URL.createObjectURL.bind(URL);
+    }
+
+    win.__convertedBlobs = [];
+    URL.createObjectURL = (object: Blob | MediaSource) => {
+      if (object instanceof Blob) {
+        win.__convertedBlobs?.push(object);
+      }
+      return win.__originalCreateObjectURL?.(object) ?? "";
+    };
+  });
+
+  const watermarkedPng = await createCornerWatermarkPng(page);
 
   await page.locator('input[type="file"]').setInputFiles({
     name: "watermark-sample.png",
     mimeType: "image/png",
-    buffer: SAMPLE_PNG,
+    buffer: watermarkedPng,
   });
 
   await expect(page.getByAltText("watermark-sample.png")).toBeVisible();
   await page.getByRole("button", { name: "Qualitätseinstellungen" }).click();
-  await page.getByLabel("Watermark entfernen").click();
-  await expect(page.getByLabel("Watermark entfernen")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByText(/Nur für eigene Bilder/)).toBeVisible();
+  await expect(page.getByText(/keine echte Inpainting-Garantie/)).toBeVisible();
+  await page.getByLabel("Watermark bereinigen").click();
+  await expect(page.getByLabel("Watermark bereinigen")).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: /^Start$/ }).click();
   await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+
+  const cleanedPixel = await page.evaluate(async () => {
+    const win = window as Window & { __convertedBlobs?: Blob[] };
+    const blob = win.__convertedBlobs?.at(-1);
+    if (!blob) throw new Error("Missing converted image blob");
+
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas unavailable");
+    context.drawImage(bitmap, 0, 0);
+    bitmap.close();
+
+    const [red, green, blue] = context.getImageData(72, 46, 1, 1).data;
+    return { blue, green, red };
+  });
+
+  expect(cleanedPixel.red).toBeLessThan(190);
+  expect(cleanedPixel.green).toBeGreaterThan(100);
 
   await guards.assertClean();
 });

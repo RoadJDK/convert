@@ -1,4 +1,5 @@
 import { createEncodingCanvas, type EncodingCanvas } from "@/lib/imageEncoding";
+import { createLocalRemovalPlan, type LocalRemovalPlan } from "@/lib/localRemovalPlan";
 
 export interface ImageSize {
   width: number;
@@ -17,6 +18,7 @@ export interface WatermarkCleanupRegion extends PixelRect {
 export interface WatermarkCleanupPlan {
   regions: WatermarkCleanupRegion[];
   blurRadius: number;
+  removal: LocalRemovalPlan;
 }
 
 const MIN_REGION_WIDTH = 32;
@@ -74,6 +76,11 @@ export const createWatermarkCleanupPlan = (size: ImageSize): WatermarkCleanupPla
 
   return {
     blurRadius: clamp(Math.round(Math.min(safeWidth, safeHeight) * 0.012), 2, 10),
+    removal: createLocalRemovalPlan({
+      target: "static-corner-watermark",
+      width: safeWidth,
+      height: safeHeight,
+    }),
     regions: [
       createRegion("left", { width: safeWidth, height: safeHeight }, regionWidth, regionHeight, marginX, marginY),
       createRegion("right", { width: safeWidth, height: safeHeight }, regionWidth, regionHeight, marginX, marginY),

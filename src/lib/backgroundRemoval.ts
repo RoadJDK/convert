@@ -1,8 +1,10 @@
+import { removeBackground } from "@imgly/background-removal";
+
 type BackgroundRemovalProgress = (key: string, current: number, total: number) => void;
 
 export type BackgroundRemovalConfig = {
   publicPath: string;
-  model: string;
+  model: "isnet" | "isnet_fp16" | "isnet_quint8";
   device: "cpu";
   progress: BackgroundRemovalProgress;
   output: {
@@ -11,13 +13,6 @@ export type BackgroundRemovalConfig = {
   };
 };
 
-type BackgroundRemovalModule = {
-  removeBackground: (input: File | Blob, config: BackgroundRemovalConfig) => Promise<Blob>;
-};
-
-const BACKGROUND_REMOVAL_MODULE_URL = "https://esm.sh/@imgly/background-removal@1.7.0";
-
 export async function removeImageBackground(input: File | Blob, config: BackgroundRemovalConfig): Promise<Blob> {
-  const module = (await import(/* @vite-ignore */ BACKGROUND_REMOVAL_MODULE_URL)) as BackgroundRemovalModule;
-  return module.removeBackground(input, config);
+  return removeBackground(input, config);
 }
