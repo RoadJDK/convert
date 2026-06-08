@@ -1,4 +1,5 @@
 import type { CropArea } from "@/types/converter";
+import type { CleanupMask } from "@/types/converter";
 import { resolveCropAreaToSourcePixels } from "@/lib/cropMath";
 
 type ResolveImageRenderPlanOptions = {
@@ -17,6 +18,12 @@ export type ImageRenderPlan = {
 
 type ResolveRenderedCleanupAreaOptions = {
   cleanupArea?: CropArea;
+  renderSource: ImageRenderPlan["source"];
+  sourceSize: { width: number; height: number };
+};
+
+type ResolveRenderedCleanupMaskOptions = {
+  cleanupMask?: CleanupMask;
   renderSource: ImageRenderPlan["source"];
   sourceSize: { width: number; height: number };
 };
@@ -72,4 +79,47 @@ export function resolveRenderedCleanupArea(options: ResolveRenderedCleanupAreaOp
     width: normalizeFraction((right - left) / source.width),
     height: normalizeFraction((bottom - top) / source.height),
   };
+}
+
+export function resolveRenderedCleanupMask(options: ResolveRenderedCleanupMaskOptions): CleanupMask | undefined {
+  if (!options.cleanupMask || options.cleanupMask.strokes.length === 0) return undefined;
+
+  const sourceWidth = Math.max(1, Math.round(options.sourceSize.width));
+  const sourceHeight = Math.max(1, Math.round(options.sourceSize.height));
+  const source = options.renderSource;
+  const sourceBrushBase = Math.min(sourceWidth, sourceHeight);
+  const renderBrushBase = Math.min(source.width, source.height);
+  const strokes = options.cleanupMask.strokes
+    .map((stroke) => {
+      const points = stroke.points
+        .map((point) => {
+          const sourceX = point.x * sourceWidth;
+          const sourceY = point.y * sourceHeight;
+
+          if (
+            sourceX < source.x ||
+            sourceY < source.y ||
+            sourceX > source.x + source.width ||
+            sourceY > source.y + source.height
+          ) {
+            return undefined;
+          }
+
+          return {
+            x: normalizeFraction((sourceX - source.x) / source.width),
+            y: normalizeFraction((sourceY - source.y) / source.height),
+          };
+        })
+        .filter((point): point is { x: number; y: number } => Boolean(point));
+
+      if (points.length === 0) return undefined;
+
+      return {
+        brushRadius: normalizeFraction((stroke.brushRadius * sourceBrushBase) / renderBrushBase),
+        points,
+      };
+    })
+    .filter((stroke): stroke is CleanupMask["strokes"][number] => Boolean(stroke));
+
+  return strokes.length > 0 ? { strokes } : undefined;
 }

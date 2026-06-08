@@ -706,6 +706,84 @@ test("applies the image watermark cleanup option", async ({ page }) => {
   await guards.assertClean();
 });
 
+test("applies a freehand image cleanup mask", async ({ page }) => {
+  const guards = installPageGuards(page);
+  await page.evaluate(() => {
+    const win = window as Window & {
+      __convertedBlobs?: Blob[];
+      __originalCreateObjectURL?: typeof URL.createObjectURL;
+    };
+
+    if (!win.__originalCreateObjectURL) {
+      win.__originalCreateObjectURL = URL.createObjectURL.bind(URL);
+    }
+
+    win.__convertedBlobs = [];
+    URL.createObjectURL = (object: Blob | MediaSource) => {
+      if (object instanceof Blob) {
+        win.__convertedBlobs?.push(object);
+      }
+      return win.__originalCreateObjectURL?.(object) ?? "";
+    };
+  });
+
+  const watermarkedPng = await createCornerWatermarkPng(page);
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "freehand-watermark.png",
+    mimeType: "image/png",
+    buffer: watermarkedPng,
+  });
+
+  await expect(page.getByAltText("freehand-watermark.png")).toBeVisible();
+  await page.getByRole("button", { name: "Qualitätseinstellungen" }).click();
+  await page.getByLabel("Watermark bereinigen").click();
+  await page.getByRole("button", { name: "Bereich wählen" }).click();
+  await page.getByRole("radio", { name: "Freihandmaske" }).click();
+  await page.getByRole("slider", { name: "Pinselgröße" }).focus();
+  await page.keyboard.press("End");
+
+  const mask = page.getByTestId("cleanup-freehand-mask");
+  await expect(mask).toBeVisible();
+  const box = await mask.boundingBox();
+  if (!box) throw new Error("Missing freehand mask bounds");
+
+  await page.mouse.move(box.x + box.width * 0.62, box.y + box.height * 0.72);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.95, box.y + box.height * 0.72, { steps: 12 });
+  await page.mouse.up();
+  await expect(page.getByRole("button", { name: "Maske leeren" })).toBeEnabled();
+  await page.getByRole("button", { name: "Bereich verwenden" }).click();
+  await expect(page.getByText(/Freihandmaske/)).toBeVisible();
+
+  await page.getByRole("button", { name: /^Start$/ }).click();
+  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+
+  const cleanedPixel = await page.evaluate(async () => {
+    const win = window as Window & { __convertedBlobs?: Blob[] };
+    const blob = win.__convertedBlobs?.at(-1);
+    if (!blob) throw new Error("Missing converted image blob");
+
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas unavailable");
+    context.drawImage(bitmap, 0, 0);
+    bitmap.close();
+
+    const [red, green, blue] = context.getImageData(72, 46, 1, 1).data;
+    return { blue, green, red };
+  });
+
+  expect(cleanedPixel.green).toBeGreaterThan(100);
+  expect(cleanedPixel.blue).toBeGreaterThan(80);
+  expect(cleanedPixel.red - cleanedPixel.green).toBeLessThan(120);
+
+  await guards.assertClean();
+});
+
 test("keeps the image crop selection on a quick click without drag", async ({ page }) => {
   const guards = installPageGuards(page);
 

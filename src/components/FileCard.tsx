@@ -139,6 +139,7 @@ export const FileCard = ({
             {formatFileSize(file.file.size)}
             {file.cropArea && <span className="ml-2 text-primary">• Zugeschnitten</span>}
             {file.cleanupArea && <span className="ml-2 text-primary">• Bereinigungsbereich</span>}
+            {file.cleanupMask && <span className="ml-2 text-primary">• Freihandmaske</span>}
             {file.trimRange && <span className="ml-2 text-accent">• Geschnitten</span>}
             {file.videoRotation && <span className="ml-2 text-accent">• Gedreht</span>}
           </p>
@@ -183,6 +184,7 @@ export const FileCard = ({
           removeBackgroundEnabled={removeBackgroundEnabled}
           removeWatermarkEnabled={removeWatermarkEnabled}
           cleanupArea={file.cleanupArea}
+          cleanupMask={file.cleanupMask}
           showIndividualActions={showIndividualActions}
           onAIRename={onAIRename}
           onConvert={onConvert}

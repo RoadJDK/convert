@@ -1,7 +1,7 @@
 import type { EncodingCanvas } from "@/lib/imageEncoding";
-import { createRectangularInpaintingMask, inpaintMaskedPixels } from "@/lib/localInpainting";
+import { createRectangularInpaintingMask, createStrokeInpaintingMask, inpaintMaskedPixels } from "@/lib/localInpainting";
 import { createLocalRemovalPlan, type LocalRemovalPlan } from "@/lib/localRemovalPlan";
-import type { CropArea } from "@/types/converter";
+import type { CleanupMask, CropArea } from "@/types/converter";
 import { resolveCropAreaToSourcePixels } from "@/lib/cropMath";
 
 export interface ImageSize {
@@ -99,7 +99,7 @@ export const createWatermarkCleanupPlan = (size: ImageSize, manualArea?: CropAre
   };
 };
 
-export const applyWatermarkCleanup = (canvas: EncodingCanvas, manualArea?: CropArea): void => {
+export const applyWatermarkCleanup = (canvas: EncodingCanvas, manualArea?: CropArea, cleanupMask?: CleanupMask): void => {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new Error("Failed to create canvas context");
@@ -113,10 +113,9 @@ export const applyWatermarkCleanup = (canvas: EncodingCanvas, manualArea?: CropA
     manualArea,
   );
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const mask = createRectangularInpaintingMask(
-    { width: canvas.width, height: canvas.height },
-    plan.regions,
-  );
+  const mask = cleanupMask && cleanupMask.strokes.length > 0
+    ? createStrokeInpaintingMask({ width: canvas.width, height: canvas.height }, cleanupMask.strokes)
+    : createRectangularInpaintingMask({ width: canvas.width, height: canvas.height }, plan.regions);
   const result = inpaintMaskedPixels(imageData, mask);
 
   imageData.data.set(result.image.data);

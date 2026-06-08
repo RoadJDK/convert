@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createRectangularInpaintingMask, inpaintMaskedPixels } from "@/lib/localInpainting";
+import { createRectangularInpaintingMask, createStrokeInpaintingMask, inpaintMaskedPixels } from "@/lib/localInpainting";
 
 function createFixtureImage(width: number, height: number) {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -62,6 +62,24 @@ describe("local inpainting", () => {
       1, 1, 0, 0,
       1, 1, 0, 0,
     ]);
+  });
+
+  it("rasterizes normalized freehand strokes into a brush mask", () => {
+    const mask = createStrokeInpaintingMask(
+      { width: 10, height: 10 },
+      [{
+        brushRadius: 0.15,
+        points: [
+          { x: 0.2, y: 0.5 },
+          { x: 0.8, y: 0.5 },
+        ],
+      }],
+    );
+
+    expect(mask[5 * 10 + 2]).toBe(1);
+    expect(mask[5 * 10 + 5]).toBe(1);
+    expect(mask[5 * 10 + 8]).toBe(1);
+    expect(mask[1 * 10 + 5]).toBe(0);
   });
 
   it("replaces a saturated corner watermark sample when the mask includes the full mark", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createWatermarkCleanupPlan } from "@/lib/watermarkCleanup";
+import { applyWatermarkCleanup, createWatermarkCleanupPlan } from "@/lib/watermarkCleanup";
 
 describe("createWatermarkCleanupPlan", () => {
   it("targets both lower corners for moving social watermarks", () => {
@@ -81,5 +81,65 @@ describe("createWatermarkCleanupPlan", () => {
       width: 40,
       height: 28,
     });
+  });
+});
+
+describe("applyWatermarkCleanup", () => {
+  it("uses a freehand cleanup mask when strokes are provided", () => {
+    const width = 96;
+    const height = 64;
+    const imageData = {
+      data: new Uint8ClampedArray(width * height * 4),
+      width,
+      height,
+    };
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const offset = (y * width + x) * 4;
+        imageData.data[offset] = x < Math.floor(width / 2) ? 20 : 220;
+        imageData.data[offset + 1] = y * 4;
+        imageData.data[offset + 2] = 80;
+        imageData.data[offset + 3] = 255;
+      }
+    }
+
+    for (let y = 36; y < 58; y += 1) {
+      for (let x = 60; x < 92; x += 1) {
+        const offset = (y * width + x) * 4;
+        imageData.data[offset] = 225;
+        imageData.data[offset + 1] = 18;
+        imageData.data[offset + 2] = 47;
+      }
+    }
+
+    const context = {
+      getImageData: () => imageData,
+      putImageData: (updated: typeof imageData) => {
+        imageData.data.set(updated.data);
+      },
+    };
+    const canvas = {
+      width,
+      height,
+      getContext: () => context,
+    } as unknown as HTMLCanvasElement;
+
+    applyWatermarkCleanup(canvas, undefined, {
+      strokes: [{
+        brushRadius: 0.25,
+        points: [
+          { x: 0.62, y: 0.72 },
+          { x: 0.95, y: 0.72 },
+        ],
+      }],
+    });
+
+    const offset = (46 * width + 72) * 4;
+    const [red, green, blue] = imageData.data.slice(offset, offset + 3);
+
+    expect(green).toBeGreaterThan(100);
+    expect(blue).toBeGreaterThan(70);
+    expect(red - green).toBeLessThan(120);
   });
 });

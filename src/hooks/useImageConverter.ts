@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { QualitySettings, CropArea, ImageOutputFormat } from "@/types/converter";
+import { QualitySettings, CleanupMask, CropArea, ImageOutputFormat } from "@/types/converter";
 import {
   canvasToBlobWithFormat,
   compressLossyToMaxSize,
@@ -13,7 +13,7 @@ import {
 } from "@/lib/imageEncoding";
 import { applyWatermarkCleanup } from "@/lib/watermarkCleanup";
 import { readDisplayableImageAsDataUrl } from "@/lib/displayableImage";
-import { resolveImageRenderPlan, resolveRenderedCleanupArea } from "@/lib/imageRenderPlan";
+import { resolveImageRenderPlan, resolveRenderedCleanupArea, resolveRenderedCleanupMask } from "@/lib/imageRenderPlan";
 
 interface ConversionResult {
   blob: Blob;
@@ -24,6 +24,7 @@ interface ConversionOptions {
   qualitySettings: QualitySettings;
   cropArea?: CropArea;
   cleanupArea?: CropArea;
+  cleanupMask?: CleanupMask;
   dimensions?: { width: number; height: number };
   addWhiteBackground?: boolean;
   removeWatermark?: boolean;
@@ -45,7 +46,7 @@ export const useImageConverter = () => {
         img.onload = async () => {
           onProgress(40);
 
-          const { qualitySettings, cropArea, cleanupArea, dimensions, addWhiteBackground, removeWatermark } = options;
+          const { qualitySettings, cropArea, cleanupArea, cleanupMask, dimensions, addWhiteBackground, removeWatermark } = options;
           const outputFormat = (qualitySettings.outputFormat as ImageOutputFormat) || "webp";
           const sourceDimensions = {
             width: img.naturalWidth || img.width,
@@ -82,6 +83,11 @@ export const useImageConverter = () => {
               canvas,
               resolveRenderedCleanupArea({
                 cleanupArea,
+                renderSource: source,
+                sourceSize: sourceDimensions,
+              }),
+              resolveRenderedCleanupMask({
+                cleanupMask,
                 renderSource: source,
                 sourceSize: sourceDimensions,
               }),

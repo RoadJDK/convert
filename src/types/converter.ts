@@ -39,6 +39,23 @@ export interface CropArea {
   height: number;
 }
 
+export interface CleanupMaskPoint {
+  x: number;
+  y: number;
+}
+
+export interface CleanupMaskStroke {
+  points: CleanupMaskPoint[];
+  /**
+   * Normalized brush radius relative to the smaller source-image dimension.
+   */
+  brushRadius: number;
+}
+
+export interface CleanupMask {
+  strokes: CleanupMaskStroke[];
+}
+
 export interface TrimRange {
   start: number; // in seconds
   end: number; // in seconds
@@ -58,6 +75,7 @@ export interface ConvertibleFile {
   qualitySettings: QualitySettings;
   cropArea?: CropArea;
   cleanupArea?: CropArea;
+  cleanupMask?: CleanupMask;
   dimensions?: { width: number; height: number };
   originalSize: number;
   convertedSize?: number;

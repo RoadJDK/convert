@@ -25,6 +25,16 @@ export type InpaintingRect = {
   height: number;
 };
 
+export type NormalizedMaskPoint = {
+  x: number;
+  y: number;
+};
+
+export type NormalizedMaskStroke = {
+  points: NormalizedMaskPoint[];
+  brushRadius: number;
+};
+
 type InpaintingOptions = {
   maxIterations?: number;
   radius?: number;
@@ -56,6 +66,67 @@ export function createRectangularInpaintingMask(
     for (let y = top; y < bottom; y += 1) {
       for (let x = left; x < right; x += 1) {
         mask[y * width + x] = 1;
+      }
+    }
+  }
+
+  return mask;
+}
+
+function fillBrush(mask: InpaintingMask, width: number, height: number, centerX: number, centerY: number, radius: number): void {
+  const safeRadius = Math.max(1, radius);
+  const left = clamp(Math.floor(centerX - safeRadius), 0, width - 1);
+  const top = clamp(Math.floor(centerY - safeRadius), 0, height - 1);
+  const right = clamp(Math.ceil(centerX + safeRadius), left, width - 1);
+  const bottom = clamp(Math.ceil(centerY + safeRadius), top, height - 1);
+  const radiusSquared = safeRadius * safeRadius;
+
+  for (let y = top; y <= bottom; y += 1) {
+    for (let x = left; x <= right; x += 1) {
+      const dx = x - centerX;
+      const dy = y - centerY;
+      if (dx * dx + dy * dy <= radiusSquared) {
+        mask[y * width + x] = 1;
+      }
+    }
+  }
+}
+
+function denormalizePoint(point: NormalizedMaskPoint, width: number, height: number): { x: number; y: number } {
+  return {
+    x: clamp(point.x, 0, 1) * Math.max(0, width - 1),
+    y: clamp(point.y, 0, 1) * Math.max(0, height - 1),
+  };
+}
+
+export function createStrokeInpaintingMask(
+  size: { width: number; height: number },
+  strokes: NormalizedMaskStroke[],
+): InpaintingMask {
+  const width = Math.max(1, Math.round(size.width));
+  const height = Math.max(1, Math.round(size.height));
+  const mask = new Uint8Array(width * height);
+
+  for (const stroke of strokes) {
+    const radius = clamp(stroke.brushRadius, 0.001, 0.5) * Math.min(width, height);
+    const points = stroke.points.map((point) => denormalizePoint(point, width, height));
+
+    for (let index = 0; index < points.length; index += 1) {
+      const current = points[index];
+      const previous = points[index - 1] ?? current;
+      const distance = Math.hypot(current.x - previous.x, current.y - previous.y);
+      const steps = Math.max(1, Math.ceil(distance / Math.max(1, radius * 0.5)));
+
+      for (let step = 0; step <= steps; step += 1) {
+        const progress = step / steps;
+        fillBrush(
+          mask,
+          width,
+          height,
+          previous.x + (current.x - previous.x) * progress,
+          previous.y + (current.y - previous.y) * progress,
+          radius,
+        );
       }
     }
   }

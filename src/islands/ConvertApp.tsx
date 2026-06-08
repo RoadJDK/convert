@@ -9,7 +9,7 @@ import { WorkspaceIntro } from '@/components/workspace/WorkspaceIntro';
 import { WorkspaceSidebar } from '@/components/workspace/WorkspaceSidebar';
 import { useFileConverter } from '@/hooks/useFileConverter';
 import { useAIRename } from '@/hooks/useAIRename';
-import { ConvertibleFile, CropArea, QualitySettings, TrimRange, FileType, VideoRotation } from '@/types/converter';
+import { CleanupMask, ConvertibleFile, CropArea, QualitySettings, TrimRange, FileType, VideoRotation } from '@/types/converter';
 import { runLimitedConcurrency } from '@/lib/conversionQueue';
 
 const LOCAL_CONVERSION_CONCURRENCY = 2;
@@ -90,11 +90,19 @@ const Index = () => {
     }
   }, [cropDialogFile, updateFileCrop]);
 
-  const handleCleanupAreaApply = useCallback((cleanupArea: CropArea | undefined) => {
+  const handleCleanupAreaApply = useCallback((
+    cleanupArea: CropArea | undefined,
+    _dimensions?: { width: number; height: number },
+    _trimRange?: TrimRange,
+    _videoRotation?: VideoRotation,
+    cleanupMask?: CleanupMask,
+  ) => {
     if (cleanupDialogFile) {
+      const hasCleanupMask = Boolean(cleanupMask?.strokes.length);
       updateFile(cleanupDialogFile.id, {
-        cleanupArea,
-        removeWatermark: Boolean(cleanupArea),
+        cleanupArea: hasCleanupMask ? undefined : cleanupArea,
+        cleanupMask,
+        removeWatermark: Boolean(cleanupArea || hasCleanupMask),
       });
     }
   }, [cleanupDialogFile, updateFile]);
@@ -163,7 +171,7 @@ const Index = () => {
   }, [updateFile]);
 
   const handleToggleRemoveWatermark = useCallback((fileId: string, enabled: boolean) => {
-    updateFile(fileId, enabled ? { removeWatermark: true } : { removeWatermark: false, cleanupArea: undefined });
+    updateFile(fileId, enabled ? { removeWatermark: true } : { removeWatermark: false, cleanupArea: undefined, cleanupMask: undefined });
   }, [updateFile]);
 
   const pendingCount = files.filter((f) => f.status === 'pending').length;

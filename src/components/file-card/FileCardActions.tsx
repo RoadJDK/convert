@@ -22,6 +22,7 @@ type FileCardActionsProps = {
   removeBackgroundEnabled?: boolean;
   removeWatermarkEnabled?: boolean;
   cleanupArea?: ConvertibleFile["cleanupArea"];
+  cleanupMask?: ConvertibleFile["cleanupMask"];
   showIndividualActions: boolean;
   onAIRename?: () => void;
   onConvert: () => void;
@@ -42,6 +43,7 @@ export function FileCardActions({
   removeBackgroundEnabled,
   removeWatermarkEnabled,
   cleanupArea,
+  cleanupMask,
   showIndividualActions,
   onAIRename,
   onConvert,
@@ -99,6 +101,7 @@ export function FileCardActions({
             removeWatermark={removeWatermarkEnabled}
             onRemoveWatermarkChange={onToggleRemoveWatermark}
             cleanupArea={cleanupArea}
+            cleanupMask={cleanupMask}
             onCleanupAreaClick={onCleanupAreaClick}
           />
           <Button

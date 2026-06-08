@@ -12,6 +12,7 @@ import {
   formatFileSize,
   FileType,
   CropArea,
+  CleanupMask,
 } from '@/types/converter';
 import { estimateConvertedFileSize } from '@/lib/sizeEstimation';
 import { createLocalRemovalPlan } from '@/lib/localRemovalPlan';
@@ -37,6 +38,7 @@ interface QualitySettingsProps {
   removeWatermark?: boolean;
   onRemoveWatermarkChange?: (enabled: boolean) => void;
   cleanupArea?: CropArea;
+  cleanupMask?: CleanupMask;
   onCleanupAreaClick?: () => void;
 }
 
@@ -54,6 +56,7 @@ export const QualitySettings = ({
   removeWatermark,
   onRemoveWatermarkChange,
   cleanupArea,
+  cleanupMask,
   onCleanupAreaClick,
 }: QualitySettingsProps) => {
   const [open, setOpen] = useState(false);
@@ -195,7 +198,7 @@ export const QualitySettings = ({
                         onCleanupAreaClick();
                       }}
                     >
-                      {cleanupArea ? "Bereich ändern" : "Bereich wählen"}
+                      {cleanupArea || cleanupMask ? "Maske ändern" : "Bereich wählen"}
                     </Button>
                   )}
                 </div>
