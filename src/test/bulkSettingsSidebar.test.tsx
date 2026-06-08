@@ -103,4 +103,30 @@ describe("BulkSettingsSidebar", () => {
     expect(screen.getByText(/lokal im Browser/i)).toBeInTheDocument();
     expect(screen.getByText("Qualitätseinstellungen")).toBeInTheDocument();
   });
+
+  it("applies a bulk conversion preset and closes the sidebar", () => {
+    const onApply = vi.fn();
+    const onClose = vi.fn();
+
+    render(
+      <BulkSettingsSidebar
+        open
+        selectedCount={2}
+        selectedType="image"
+        onApply={onApply}
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Kleiner JPEG" }));
+
+    expect(onApply).toHaveBeenCalledWith({
+      qualitySettings: expect.objectContaining({
+        mode: "maxSize",
+        maxSizeKB: 300,
+        outputFormat: "jpeg",
+      }),
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

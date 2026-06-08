@@ -16,6 +16,7 @@ import {
 } from '@/types/converter';
 import { estimateConvertedFileSize } from '@/lib/sizeEstimation';
 import { createLocalRemovalPlan } from '@/lib/localRemovalPlan';
+import { applyConversionPreset, getConversionPresets } from '@/lib/conversionPresets';
 import {
   EraserMaskIcon,
   MaxSizeIcon,
@@ -66,6 +67,7 @@ export const QualitySettings = ({
   const watermarkRemovalDescriptionId = useId();
   const supportsRemovalControls = fileType === 'image' || fileType === 'video';
   const supportsBackgroundRemoval = fileType === 'image';
+  const presets = useMemo(() => getConversionPresets(fileType), [fileType]);
 
   const handleModeChange = (mode: string) => {
     onChange({ ...settings, mode: mode as QualityMode });
@@ -143,6 +145,27 @@ export const QualitySettings = ({
       <PopoverContent className="w-80 bg-popover border border-border shadow-lg z-50" align="end">
         <div className="space-y-4">
           <h4 className="font-medium text-sm">Qualitätseinstellungen</h4>
+
+          {presets.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Presets</p>
+              <div className="grid grid-cols-2 gap-2">
+                {presets.map((preset) => (
+                  <Button
+                    key={preset.id}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    title={preset.description}
+                    onClick={() => onChange(applyConversionPreset(settings, preset))}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {supportsRemovalControls && ((supportsBackgroundRemoval && onRemoveBackgroundChange) || onRemoveWatermarkChange) && (
             <div className="space-y-2 rounded-lg border border-border bg-secondary/30 p-3">

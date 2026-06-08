@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileType, QualitySettings, QualityMode } from '@/types/converter';
+import { applyConversionPreset, getConversionPresets } from '@/lib/conversionPresets';
 import {
   BatchFilesIcon,
   LoaderRingIcon,
@@ -75,6 +76,7 @@ export const BulkSettingsSidebar = ({
   }
 
   const isPdfSelection = selectedType === 'pdf';
+  const presets = selectedType && !isPdfSelection ? getConversionPresets(selectedType) : [];
 
   return (
     <aside
@@ -239,6 +241,35 @@ export const BulkSettingsSidebar = ({
         {!isPdfSelection && (
         <div className="space-y-4">
           <h3 className="text-sm font-medium">Qualitätseinstellungen</h3>
+
+          {presets.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Presets</p>
+              <div className="grid grid-cols-2 gap-2">
+                {presets.map((preset) => (
+                  <Button
+                    key={preset.id}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    title={preset.description}
+                    onClick={() => {
+                      onApply({
+                        qualitySettings: applyConversionPreset(
+                          { mode, percentage, maxSizeKB, scale: 100 },
+                          preset,
+                        ),
+                      });
+                      onClose();
+                    }}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <Tabs value={mode} onValueChange={(v) => setMode(v as QualityMode)}>
             <TabsList className="grid w-full grid-cols-2">

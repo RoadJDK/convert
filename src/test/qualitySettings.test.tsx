@@ -53,4 +53,26 @@ describe("QualitySettings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Bereich wählen" }));
     expect(onCleanupAreaClick).toHaveBeenCalledTimes(1);
   });
+
+  it("applies image presets through the settings popover", async () => {
+    const onChange = vi.fn();
+
+    render(
+      <QualitySettings
+        settings={DEFAULT_QUALITY_SETTINGS}
+        onChange={onChange}
+        fileType="image"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Qualitätseinstellungen" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Kleiner JPEG" }));
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      mode: "maxSize",
+      maxSizeKB: 300,
+      outputFormat: "jpeg",
+      scale: 100,
+    }));
+  });
 });

@@ -762,6 +762,41 @@ test("creates a searchable OCR PDF from selected images locally without upload",
   await guards.assertClean();
 });
 
+test("applies an image preset to a bulk selection without upload", async ({ page }) => {
+  const guards = installPageGuards(page);
+  const writeRequests: string[] = [];
+  page.on("request", (request) => {
+    if (["POST", "PUT", "PATCH"].includes(request.method())) {
+      writeRequests.push(`${request.method()} ${request.url()}`);
+    }
+  });
+
+  await page.locator('input[type="file"]').setInputFiles([
+    {
+      name: "preset-a.png",
+      mimeType: "image/png",
+      buffer: SAMPLE_PNG,
+    },
+    {
+      name: "preset-b.png",
+      mimeType: "image/png",
+      buffer: SAMPLE_PNG,
+    },
+  ]);
+
+  await expect(page.getByAltText("preset-a.png")).toBeVisible();
+  await expect(page.getByAltText("preset-b.png")).toBeVisible();
+  await page.getByRole("button", { name: "Bilder (2)" }).click();
+  await page.getByRole("button", { name: "Kleiner JPEG" }).click();
+
+  await expect(page.locator('[title="preset-a.jpg"]')).toBeVisible();
+  await expect(page.locator('[title="preset-b.jpg"]')).toBeVisible();
+  await expect(page.getByText("Qualität: max 300 KB")).toHaveCount(2);
+  expect(writeRequests).toEqual([]);
+
+  await guards.assertClean();
+});
+
 test("runs single PDF page tools locally without upload", async ({ page }) => {
   const guards = installPageGuards(page);
   const writeRequests: string[] = [];
