@@ -79,6 +79,7 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
   const imgRef = useRef<HTMLImageElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const cleanupPointerIdRef = useRef<number | null>(null);
+  const cleanupMaskStrokesRef = useRef<CleanupMaskStroke[]>([]);
   const [imgSrc, setImgSrc] = useState('');
   const [videoSrc, setVideoSrc] = useState('');
   const [videoRotation, setVideoRotation] = useState<VideoRotation>(0);
@@ -100,6 +101,17 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
     onCropChange: setCrop,
     onMediaDimensions: setMediaDimensions,
   });
+
+  const setCleanupMaskStrokesSync = useCallback((strokes: CleanupMaskStroke[]) => {
+    cleanupMaskStrokesRef.current = strokes;
+    setCleanupMaskStrokes(strokes);
+  }, []);
+
+  const updateCleanupMaskStrokesSync = useCallback((updater: (previous: CleanupMaskStroke[]) => CleanupMaskStroke[]) => {
+    const next = updater(cleanupMaskStrokesRef.current);
+    cleanupMaskStrokesRef.current = next;
+    setCleanupMaskStrokes(next);
+  }, []);
 
   // Load image or video
   useEffect(() => {
@@ -144,12 +156,12 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
       setCompletedCrop(undefined);
       setCleanupSelectionMode("rectangle");
       setCleanupBrushRadius(DEFAULT_CLEANUP_BRUSH_RADIUS);
-      setCleanupMaskStrokes([]);
+      setCleanupMaskStrokesSync([]);
       setVideoRotation(0);
       stopPlayback();
       resetAspectInputs();
     }
-  }, [open, resetAspectInputs, stopPlayback]);
+  }, [open, resetAspectInputs, setCleanupMaskStrokesSync, stopPlayback]);
 
   const isCleanupMode = mode === "cleanup";
 
@@ -157,10 +169,10 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
     if (!open || !isCleanupMode || !file) return;
 
     const existingStrokes = file.cleanupMask?.strokes ?? [];
-    setCleanupMaskStrokes(existingStrokes);
+    setCleanupMaskStrokesSync(existingStrokes);
     setCleanupBrushRadius(existingStrokes[0]?.brushRadius ?? DEFAULT_CLEANUP_BRUSH_RADIUS);
     setCleanupSelectionMode(existingStrokes.length > 0 ? "freehand" : "rectangle");
-  }, [file, isCleanupMode, open]);
+  }, [file, isCleanupMode, open, setCleanupMaskStrokesSync]);
 
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const { naturalWidth, naturalHeight } = e.currentTarget;
@@ -220,7 +232,7 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
 
     // Get crop area from either image or video
     if (isCleanupMode && cleanupSelectionMode === "freehand") {
-      const strokes = cleanupMaskStrokes.filter((stroke) => stroke.points.length > 0);
+      const strokes = cleanupMaskStrokesRef.current.filter((stroke) => stroke.points.length > 0);
       cleanupMask = strokes.length > 0 ? { strokes } : undefined;
     } else if (completedCrop) {
       if (file?.type === 'image' && imgRef.current) {
@@ -268,7 +280,7 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
   }, []);
 
   const appendCleanupMaskPoint = useCallback((point: CleanupMaskPoint) => {
-    setCleanupMaskStrokes((previous) => {
+    updateCleanupMaskStrokesSync((previous) => {
       if (previous.length === 0) return previous;
 
       const next = [...previous];
@@ -284,7 +296,7 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
       };
       return next;
     });
-  }, []);
+  }, [updateCleanupMaskStrokesSync]);
 
   const handleCleanupPointerDown = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
     if (!isCleanupMode || cleanupSelectionMode !== "freehand") return;
@@ -293,14 +305,14 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
     const point = getCleanupMaskPoint(event);
     cleanupPointerIdRef.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
-    setCleanupMaskStrokes((previous) => [
+    updateCleanupMaskStrokesSync((previous) => [
       ...previous,
       {
         brushRadius: cleanupBrushRadius,
         points: [point],
       },
     ]);
-  }, [cleanupBrushRadius, cleanupSelectionMode, getCleanupMaskPoint, isCleanupMode]);
+  }, [cleanupBrushRadius, cleanupSelectionMode, getCleanupMaskPoint, isCleanupMode, updateCleanupMaskStrokesSync]);
 
   const handleCleanupPointerMove = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
     if (cleanupPointerIdRef.current !== event.pointerId) return;
@@ -520,7 +532,7 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
                       size="sm"
                       className="h-8 w-full text-xs"
                       disabled={cleanupMaskStrokes.length === 0}
-                      onClick={() => setCleanupMaskStrokes([])}
+                      onClick={() => setCleanupMaskStrokesSync([])}
                     >
                       Maske leeren
                     </Button>
