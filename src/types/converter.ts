@@ -17,6 +17,7 @@ export type QualityMode = 'percentage' | 'maxSize';
 export type ImageOutputFormat = 'webp' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'avif' | 'svg';
 export type VideoOutputFormat = 'webm' | 'mp4';
 export type OutputFormat = ImageOutputFormat | VideoOutputFormat;
+export type VideoRotation = 0 | 90 | 180 | 270;
 
 export interface QualitySettings {
   mode: QualityMode;
@@ -61,6 +62,7 @@ export interface ConvertibleFile {
   convertedSize?: number;
   // Video-specific
   trimRange?: TrimRange;
+  videoRotation?: VideoRotation;
   videoDuration?: number;
   // Image-specific
   removeBackground?: boolean; // Toggle for background removal during conversion

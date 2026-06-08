@@ -137,6 +137,7 @@ export const FileCard = ({
             {formatFileSize(file.file.size)}
             {file.cropArea && <span className="ml-2 text-primary">• Zugeschnitten</span>}
             {file.trimRange && <span className="ml-2 text-accent">• Geschnitten</span>}
+            {file.videoRotation && <span className="ml-2 text-accent">• Gedreht</span>}
           </p>
 
           {file.status === "pending" && (

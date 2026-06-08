@@ -1,5 +1,5 @@
 import { convertMedia } from "@remotion/webcodecs";
-import type { CropArea, QualitySettings, TrimRange, VideoOutputFormat } from "@/types/converter";
+import type { CropArea, QualitySettings, TrimRange, VideoOutputFormat, VideoRotation } from "@/types/converter";
 import {
   chooseMediaRecorderMimeType,
   createVideoEncodingPlan,
@@ -11,6 +11,7 @@ type ConversionOptions = {
   cropArea?: CropArea;
   dimensions?: { width: number; height: number };
   trimRange?: TrimRange;
+  videoRotation?: VideoRotation;
 };
 
 type ConversionResult = { blob: Blob; url: string };
@@ -58,6 +59,7 @@ export async function convertWithMediaRecorder(
         dimensions: options.dimensions,
         scale: options.qualitySettings.scale,
         trimRange: options.trimRange,
+        videoRotation: options.videoRotation,
       });
 
       const canvas = document.createElement("canvas");
@@ -279,6 +281,57 @@ function drawVideoFrame(
   targetHeight: number,
   renderPlan: ReturnType<typeof resolveVideoRenderPlan>,
 ) {
+  ctx.clearRect(0, 0, targetWidth, targetHeight);
+
+  if (renderPlan.rotation !== 0) {
+    ctx.save();
+    if (renderPlan.rotation === 90) {
+      ctx.translate(targetWidth, 0);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(
+        video,
+        renderPlan.source.x,
+        renderPlan.source.y,
+        renderPlan.source.width,
+        renderPlan.source.height,
+        0,
+        0,
+        targetHeight,
+        targetWidth,
+      );
+    } else if (renderPlan.rotation === 180) {
+      ctx.translate(targetWidth, targetHeight);
+      ctx.rotate(Math.PI);
+      ctx.drawImage(
+        video,
+        renderPlan.source.x,
+        renderPlan.source.y,
+        renderPlan.source.width,
+        renderPlan.source.height,
+        0,
+        0,
+        targetWidth,
+        targetHeight,
+      );
+    } else {
+      ctx.translate(0, targetHeight);
+      ctx.rotate((Math.PI * 3) / 2);
+      ctx.drawImage(
+        video,
+        renderPlan.source.x,
+        renderPlan.source.y,
+        renderPlan.source.width,
+        renderPlan.source.height,
+        0,
+        0,
+        targetHeight,
+        targetWidth,
+      );
+    }
+    ctx.restore();
+    return;
+  }
+
   ctx.drawImage(
     video,
     renderPlan.source.x,

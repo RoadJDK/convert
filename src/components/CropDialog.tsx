@@ -10,8 +10,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { CropArea, ConvertibleFile, TrimRange } from '@/types/converter';
+import { CropArea, ConvertibleFile, TrimRange, VideoRotation } from '@/types/converter';
 import { ResizeControls } from '@/components/crop-dialog/ResizeControls';
+import { VideoRotationControls } from '@/components/crop-dialog/VideoRotationControls';
 import { VideoTrimControls } from '@/components/crop-dialog/VideoTrimControls';
 import { useResizeController } from '@/hooks/useResizeController';
 import { useVideoTrimController } from '@/hooks/useVideoTrimController';
@@ -26,7 +27,8 @@ interface CropDialogProps {
   onApply: (
     cropArea: CropArea | undefined, 
     dimensions?: { width: number; height: number },
-    trimRange?: TrimRange
+    trimRange?: TrimRange,
+    videoRotation?: VideoRotation
   ) => void;
 }
 
@@ -59,6 +61,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
   const videoRef = useRef<HTMLVideoElement>(null);
   const [imgSrc, setImgSrc] = useState('');
   const [videoSrc, setVideoSrc] = useState('');
+  const [videoRotation, setVideoRotation] = useState<VideoRotation>(0);
   const {
     currentTime,
     handlePositionChange,
@@ -102,6 +105,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
         videoUrl = URL.createObjectURL(file.file);
         setVideoSrc(videoUrl);
         setImgSrc('');
+        setVideoRotation(file.videoRotation ?? 0);
       }
     }
 
@@ -118,6 +122,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
     if (!open) {
       setCrop(undefined);
       setCompletedCrop(undefined);
+      setVideoRotation(0);
       stopPlayback();
       resetAspectInputs();
     }
@@ -188,9 +193,32 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
       trimRange = { start: trimStart, end: trimEnd };
     }
 
-    onApply(cropArea, dimensions, trimRange);
+    onApply(cropArea, dimensions, trimRange, isVideo && videoRotation !== 0 ? videoRotation : undefined);
     onClose();
   };
+
+  const handleVideoRotationChange = useCallback((direction: "left" | "right") => {
+    setVideoRotation((previous) => {
+      const next = ((direction === "right" ? previous + 90 : previous + 270) % 360) as VideoRotation;
+      return next;
+    });
+    setDimensions((previous) =>
+      previous.width > 0 && previous.height > 0
+        ? { width: previous.height, height: previous.width }
+        : previous,
+    );
+    setCrop(undefined);
+    setCompletedCrop(undefined);
+  }, [setDimensions]);
+
+  const handleVideoRotationReset = useCallback(() => {
+    setVideoRotation(0);
+    if (originalDimensions.width > 0 && originalDimensions.height > 0) {
+      setDimensions(originalDimensions);
+    }
+    setCrop(undefined);
+    setCompletedCrop(undefined);
+  }, [originalDimensions, setDimensions]);
 
   // Reset dimensions only
   const handleResetDimensions = useCallback(() => {
@@ -276,21 +304,31 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
             )}
           </div>
 
-          <ResizeControls
-            aspectHeight={aspectHeight}
-            aspectLocked={aspectLocked}
-            aspectWidth={aspectWidth}
-            completedCrop={completedCrop}
-            cropAspectLocked={cropAspectLocked}
-            dimensions={dimensions}
-            originalDimensions={originalDimensions}
-            onAspectHeightChange={handleAspectHeightChange}
-            onAspectWidthChange={handleAspectWidthChange}
-            onDimensionChange={handleDimensionChange}
-            onResetDimensions={handleResetDimensions}
-            onToggleAspectLock={toggleAspectLock}
-            onToggleCropAspect={toggleCropAspect}
-          />
+          <div className="space-y-3">
+            <ResizeControls
+              aspectHeight={aspectHeight}
+              aspectLocked={aspectLocked}
+              aspectWidth={aspectWidth}
+              completedCrop={completedCrop}
+              cropAspectLocked={cropAspectLocked}
+              dimensions={dimensions}
+              originalDimensions={originalDimensions}
+              onAspectHeightChange={handleAspectHeightChange}
+              onAspectWidthChange={handleAspectWidthChange}
+              onDimensionChange={handleDimensionChange}
+              onResetDimensions={handleResetDimensions}
+              onToggleAspectLock={toggleAspectLock}
+              onToggleCropAspect={toggleCropAspect}
+            />
+            {isVideo && (
+              <VideoRotationControls
+                rotation={videoRotation}
+                onReset={handleVideoRotationReset}
+                onRotateLeft={() => handleVideoRotationChange("left")}
+                onRotateRight={() => handleVideoRotationChange("right")}
+              />
+            )}
+          </div>
         </div>
 
         <DialogFooter className="flex-shrink-0 gap-2 pt-2 border-t">

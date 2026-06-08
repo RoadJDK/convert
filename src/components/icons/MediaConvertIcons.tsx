@@ -315,6 +315,22 @@ export const ResetFrameIcon = (props: IconProps) => (
   </IconBase>
 );
 
+export const RotateLeftIcon = (props: IconProps) => (
+  <IconBase {...props}>
+    <path d="M8 7.5h8v8H8z" />
+    <path d="M7 5.5h6a7 7 0 1 1-6.2 10.2" />
+    <path d="M7 5.5v4h4" />
+  </IconBase>
+);
+
+export const RotateRightIcon = (props: IconProps) => (
+  <IconBase {...props}>
+    <path d="M8 7.5h8v8H8z" />
+    <path d="M17 5.5h-6a7 7 0 1 0 6.2 10.2" />
+    <path d="M17 5.5v4h-4" />
+  </IconBase>
+);
+
 export const SettingsSlidersIcon = (props: IconProps) => (
   <IconBase {...props}>
     <path d="M5 7h14" />

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { ConvertibleFile, getFileType, getOutputExtension, QualitySettings, CropArea, TrimRange, DEFAULT_QUALITY_SETTINGS, DEFAULT_VIDEO_QUALITY_SETTINGS, ImageOutputFormat } from '@/types/converter';
+import { ConvertibleFile, getFileType, getOutputExtension, QualitySettings, CropArea, TrimRange, DEFAULT_QUALITY_SETTINGS, DEFAULT_VIDEO_QUALITY_SETTINGS, ImageOutputFormat, VideoRotation } from '@/types/converter';
 import { useImageConverter } from './useImageConverter';
 import { useVideoConverter } from './useVideoConverter';
 import { useStatsTracker } from './useStatsTracker';
@@ -101,9 +101,10 @@ export const useFileConverter = () => {
     id: string, 
     cropArea: CropArea | undefined, 
     dimensions?: { width: number; height: number },
-    trimRange?: TrimRange
+    trimRange?: TrimRange,
+    videoRotation?: VideoRotation
   ) => {
-    const updates: Partial<ConvertibleFile> = { cropArea, trimRange };
+    const updates: Partial<ConvertibleFile> = { cropArea, trimRange, videoRotation };
     if (dimensions) {
       updates.dimensions = dimensions;
     }
@@ -170,6 +171,7 @@ export const useFileConverter = () => {
           cropArea: fileItem.cropArea,
           dimensions: fileItem.dimensions,
           trimRange: fileItem.trimRange,
+          videoRotation: fileItem.videoRotation,
           addWhiteBackground: false,
           removeWatermark: fileItem.removeWatermark,
         };

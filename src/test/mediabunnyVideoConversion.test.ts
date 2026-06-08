@@ -64,4 +64,24 @@ describe("mediabunny video conversion adapter", () => {
       },
     });
   });
+
+  it("bakes requested right-angle rotation into the output frames", () => {
+    const config = createMediabunnyConversionConfig({
+      outputFormat: "webm",
+      videoWidth: 80,
+      videoHeight: 48,
+      duration: 1,
+      videoRotation: 90,
+    });
+
+    expect(config).toMatchObject({
+      video: {
+        allowRotationMetadata: false,
+        forceTranscode: true,
+        height: 80,
+        rotate: 90,
+        width: 48,
+      },
+    });
+  });
 });

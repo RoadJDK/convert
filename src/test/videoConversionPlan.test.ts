@@ -61,6 +61,7 @@ describe("video conversion plan", () => {
         mediabunnySupported: true,
         hasCrop: false,
         hasDimensions: true,
+        hasRotation: false,
         hasTrim: false,
       }),
     ).toEqual({
@@ -77,7 +78,25 @@ describe("video conversion plan", () => {
         mediabunnySupported: true,
         hasCrop: true,
         hasDimensions: false,
+        hasRotation: false,
         hasTrim: true,
+      }),
+    ).toEqual({
+      engine: "mediabunny",
+      degraded: false,
+      reason: "mediabunny-supported-edit",
+    });
+  });
+
+  it("uses Mediabunny for rotation edits when supported", () => {
+    expect(
+      createVideoConversionStrategy({
+        webCodecsSupported: true,
+        mediabunnySupported: true,
+        hasCrop: false,
+        hasDimensions: false,
+        hasRotation: true,
+        hasTrim: false,
       }),
     ).toEqual({
       engine: "mediabunny",
@@ -93,6 +112,7 @@ describe("video conversion plan", () => {
         mediabunnySupported: false,
         hasCrop: false,
         hasDimensions: true,
+        hasRotation: false,
         hasTrim: false,
       }),
     ).toEqual({
@@ -108,6 +128,18 @@ describe("video conversion plan", () => {
       maxWidth: 152,
       maxHeight: 150,
     });
+  });
+
+  it("swaps target dimensions for right-angle rotation when no explicit target size is set", () => {
+    const plan = resolveVideoRenderPlan({
+      videoWidth: 80,
+      videoHeight: 48,
+      duration: 1,
+      videoRotation: 90,
+    });
+
+    expect(plan.rotation).toBe(90);
+    expect(plan.target).toEqual({ width: 48, height: 80 });
   });
 
   it("maps scale-only edits to a WebCodecs scale operation", () => {

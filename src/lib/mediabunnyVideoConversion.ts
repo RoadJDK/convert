@@ -12,7 +12,7 @@ import {
   type VideoCodec,
 } from "mediabunny";
 
-import type { CropArea, QualitySettings, TrimRange, VideoOutputFormat } from "@/types/converter";
+import type { CropArea, QualitySettings, TrimRange, VideoOutputFormat, VideoRotation } from "@/types/converter";
 import { resolveVideoRenderPlan } from "@/lib/videoConversionPlan";
 
 type ConversionOptions = {
@@ -20,6 +20,7 @@ type ConversionOptions = {
   cropArea?: CropArea;
   dimensions?: { width: number; height: number };
   trimRange?: TrimRange;
+  videoRotation?: VideoRotation;
 };
 
 type ConversionResult = { blob: Blob; url: string };
@@ -36,6 +37,7 @@ type CreateMediabunnyConversionConfigOptions = {
   dimensions?: { width: number; height: number };
   scale?: number;
   trimRange?: TrimRange;
+  videoRotation?: VideoRotation;
 };
 
 export type MediabunnyOutputPlan = {
@@ -75,10 +77,12 @@ export function createMediabunnyConversionConfig(
     dimensions: options.dimensions,
     scale: options.scale,
     trimRange: options.trimRange,
+    videoRotation: options.videoRotation,
   });
   const hasCrop = Boolean(options.cropArea);
   const hasResize =
     Boolean(options.dimensions) || Math.abs(((options.scale ?? 100) / 100) - 1) > 0.001;
+  const hasRotation = Boolean(options.videoRotation);
   const crop = hasCrop
     ? {
         left: renderPlan.source.x,
@@ -102,8 +106,10 @@ export function createMediabunnyConversionConfig(
       codec: outputPlan.videoCodec,
       crop,
       fit: "fill",
-      forceTranscode: hasCrop || hasResize,
+      allowRotationMetadata: hasRotation ? false : undefined,
+      forceTranscode: hasCrop || hasResize || hasRotation,
       height: renderPlan.target.height,
+      rotate: options.videoRotation,
       width: renderPlan.target.width,
     },
   };
@@ -150,6 +156,7 @@ export async function convertWithMediabunny(
       dimensions: options.dimensions,
       scale: options.qualitySettings.scale,
       trimRange: options.trimRange,
+      videoRotation: options.videoRotation,
     });
     const target = new BufferTarget();
     const output = new Output({

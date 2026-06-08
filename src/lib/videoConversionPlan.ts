@@ -1,4 +1,4 @@
-import type { CropArea, TrimRange, VideoOutputFormat } from "@/types/converter";
+import type { CropArea, TrimRange, VideoOutputFormat, VideoRotation } from "@/types/converter";
 import { resolveCropAreaToSourcePixels } from "@/lib/cropMath";
 
 type VideoContainer = "webm" | "mp4";
@@ -20,9 +20,11 @@ type ResolveVideoRenderPlanOptions = {
   dimensions?: { width: number; height: number };
   scale?: number;
   trimRange?: TrimRange;
+  videoRotation?: VideoRotation;
 };
 
 export type VideoRenderPlan = {
+  rotation: VideoRotation;
   source: { x: number; y: number; width: number; height: number };
   target: { width: number; height: number };
   trim: { start: number; end: number; safeStart: number; duration: number };
@@ -33,6 +35,7 @@ type CreateVideoConversionStrategyOptions = {
   mediabunnySupported: boolean;
   hasCrop: boolean;
   hasDimensions: boolean;
+  hasRotation: boolean;
   hasTrim: boolean;
 };
 
@@ -97,9 +100,10 @@ export function createVideoConversionStrategy({
   mediabunnySupported,
   hasCrop,
   hasDimensions,
+  hasRotation,
   hasTrim,
 }: CreateVideoConversionStrategyOptions): VideoConversionStrategy {
-  if (hasCrop || hasTrim) {
+  if (hasCrop || hasRotation || hasTrim) {
     if (mediabunnySupported) {
       return {
         engine: "mediabunny",
@@ -171,8 +175,10 @@ export function resolveVideoRenderPlan(options: ResolveVideoRenderPlanOptions): 
   const scale = clamp((options.scale ?? 100) / 100, 0.01, 4);
   const baseWidth = options.dimensions?.width ?? width;
   const baseHeight = options.dimensions?.height ?? height;
-  const targetWidth = toEvenDimension(baseWidth * scale);
-  const targetHeight = toEvenDimension(baseHeight * scale);
+  const rotation = options.videoRotation ?? 0;
+  const swapsAxes = rotation === 90 || rotation === 270;
+  const targetWidth = toEvenDimension((swapsAxes && !options.dimensions ? baseHeight : baseWidth) * scale);
+  const targetHeight = toEvenDimension((swapsAxes && !options.dimensions ? baseWidth : baseHeight) * scale);
 
   const start = clamp(options.trimRange?.start ?? 0, 0, duration);
   const requestedEnd = options.trimRange?.end ?? duration;
@@ -180,6 +186,7 @@ export function resolveVideoRenderPlan(options: ResolveVideoRenderPlanOptions): 
   const safeStart = duration > 0 ? Math.min(start, Math.max(0, duration - 0.05)) : 0;
 
   return {
+    rotation,
     source: { x, y, width, height },
     target: { width: targetWidth, height: targetHeight },
     trim: {

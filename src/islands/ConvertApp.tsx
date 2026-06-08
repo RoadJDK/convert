@@ -9,7 +9,7 @@ import { WorkspaceIntro } from '@/components/workspace/WorkspaceIntro';
 import { WorkspaceSidebar } from '@/components/workspace/WorkspaceSidebar';
 import { useFileConverter } from '@/hooks/useFileConverter';
 import { useAIRename } from '@/hooks/useAIRename';
-import { ConvertibleFile, CropArea, QualitySettings, TrimRange, FileType } from '@/types/converter';
+import { ConvertibleFile, CropArea, QualitySettings, TrimRange, FileType, VideoRotation } from '@/types/converter';
 import { runLimitedConcurrency } from '@/lib/conversionQueue';
 
 const LOCAL_CONVERSION_CONCURRENCY = 2;
@@ -81,10 +81,11 @@ const Index = () => {
   const handleCropApply = useCallback((
     cropArea: CropArea | undefined, 
     dimensions?: { width: number; height: number },
-    trimRange?: TrimRange
+    trimRange?: TrimRange,
+    videoRotation?: VideoRotation
   ) => {
     if (cropDialogFile) {
-      updateFileCrop(cropDialogFile.id, cropArea, dimensions, trimRange);
+      updateFileCrop(cropDialogFile.id, cropArea, dimensions, trimRange, videoRotation);
     }
   }, [cropDialogFile, updateFileCrop]);
 

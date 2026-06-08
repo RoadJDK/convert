@@ -18,6 +18,7 @@ interface ConversionOptions {
   cropArea?: CropArea;
   dimensions?: { width: number; height: number };
   trimRange?: TrimRange;
+  videoRotation?: 0 | 90 | 180 | 270;
 }
 
 type ConversionResult = { blob: Blob; url: string };
@@ -119,6 +120,7 @@ export const useVideoConverter = () => {
       });
 
       const hasCrop = Boolean(options.cropArea);
+      const hasRotation = Boolean(options.videoRotation);
       const hasTrim = Boolean(options.trimRange);
       const hasResize = Boolean(options.dimensions) || options.qualitySettings.scale !== 100;
       const strategy = createVideoConversionStrategy({
@@ -126,6 +128,7 @@ export const useVideoConverter = () => {
         mediabunnySupported: isMediabunnyVideoConversionSupported(),
         hasCrop,
         hasDimensions: hasResize,
+        hasRotation,
         hasTrim,
       });
 

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { ALL_FORMATS, BufferSource, Input } from "mediabunny";
 
 const SAMPLE_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAdklEQVR4nO3QQQ3AIADAQMAKljLDf5O43Hgw7KUXsHfvewCx78sBEA0gGkA0gGgA0QCiAUQDiAYQDSAaQDSAaADRANIAogFEA4gGEA0gGkA0gGgA0QCiAUQDiAYQDSAaQDSAaADRANIAogFEA4gGEA0gGkA0gGgA0QCiAUQDiH4OawLYl/8YWwAAAABJRU5ErkJggg==",
@@ -9,6 +10,11 @@ const CROP_SAMPLE_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAZAAAADwCAIAAAChXqV1AAACZUlEQVR42u3UQQ0AAAjEsHOJJ/zhBxuQNKmCPZbpAnghEgCGBWBYgGEBGBaAYQGGBWBYAIYFGBaAYQEYFmBYAIYFYFiAYQEYFoBhAYYFYFgAhgUYFoBhARgWYFgAhgVgWIBhARgWYFgqAIYFYFiAYQEYFoBhAYYFYFgAhgUYFoBhARgWYFgAhgVgWIBhARgWgGEBhgVgWACGBRgWgGEBGBZgWACGBWBYgGEBGBZgWCoAhgVgWIBhARgWgGEBhgVgWACGBRgWgGEBGBZgWACGBWBYgGEBGBaAYQGGBWBYAIYFGBaAYQEYFmBYAIYFYFiAYQEYFmBYAIYFYFiAYQEYFoBhAYYFYFgAhgUYFoBhARgWYFgAhgVgWIBhARgWgGEBhgVgWACGBRgWgGEBGBZgWACGBWBYgGEBGBZgWACGBWBYgGEBGBaAYQGGBWBYAIYFGBaAYQEYFmBYAIYFYFiAYQEYFoBhAYYFYFgAhgUYFoBhARgWYFgAhgVgWIBhARgWYFgAhgVgWIBhARgWgGEBhgVgWACGBRgWgGEBGBZgWACGBWBYgGEBGBaAYQGGBWBYAIYFGBaAYQEYFmBYAIYFYFiAYQEYFmBYAIYFYFiAYQEYFoBhAYYFYFgAhgUYFoBhARgWYFgAhgVgWIBhARgWgGEBhgVgWACGBRgWgGEBGBZgWACGBWBYgGEBGBZgWACGBWBYgGEBGBaAYQGGBWBYAIYFGBaAYQEYFmBYAIYFYFiAYQEYFoBhAYYFYFgAhgUYFoBhARgWYFgAhgVgWIBhARgWYFgAhgVgWIBhARgWgGEBhgVwywIz0b+QMT378QAAAABJRU5ErkJggg==",
   "base64",
 );
+
+const toEvenDimension = (value: number) => {
+  const rounded = Math.max(2, Math.round(value));
+  return rounded % 2 === 0 ? rounded : rounded + 1;
+};
 
 const installPageGuards = (page: Page) => {
   const consoleProblems: string[] = [];
@@ -153,11 +159,14 @@ const expectFileCardPreviewIconToBeCentered = async (page: Page) => {
   expect(metrics.marker.height).toBeGreaterThan(0);
 };
 
-const createSampleWebm = async (page: Page): Promise<Buffer> => {
-  const bytes = await page.evaluate(async () => {
+const createSampleWebm = async (
+  page: Page,
+  dimensions: { width: number; height: number } = { width: 64, height: 64 },
+): Promise<Buffer> => {
+  const bytes = await page.evaluate(async ({ height, width }) => {
     const canvas = document.createElement("canvas");
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = width;
+    canvas.height = height;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Canvas unavailable");
 
@@ -187,6 +196,67 @@ const createSampleWebm = async (page: Page): Promise<Buffer> => {
     recorder.stop();
     await stopped;
     stream.getTracks().forEach((track) => track.stop());
+
+    const blob = new Blob(chunks, { type: "video/webm" });
+    return Array.from(new Uint8Array(await blob.arrayBuffer()));
+  }, dimensions);
+
+  return Buffer.from(bytes);
+};
+
+const createSampleWebmWithAudio = async (page: Page): Promise<Buffer> => {
+  const bytes = await page.evaluate(async () => {
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) throw new Error("AudioContext unavailable");
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas unavailable");
+
+    const audioContext = new AudioContextCtor();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const destination = audioContext.createMediaStreamDestination();
+    oscillator.frequency.value = 440;
+    gain.gain.value = 0.03;
+    oscillator.connect(gain);
+    gain.connect(destination);
+
+    const stream = canvas.captureStream(10);
+    destination.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")
+      ? "video/webm;codecs=vp8,opus"
+      : "video/webm";
+    const recorder = new MediaRecorder(stream, { mimeType });
+    const chunks: Blob[] = [];
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    };
+
+    const stopped = new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve();
+    });
+
+    await audioContext.resume();
+    oscillator.start();
+    recorder.start();
+    for (let frame = 0; frame < 16; frame += 1) {
+      context.fillStyle = frame % 2 === 0 ? "#244c5a" : "#16181d";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = "#f5d061";
+      context.fillRect(10 + frame, 16, 24, 24);
+      await new Promise((resolve) => window.setTimeout(resolve, 80));
+    }
+    recorder.stop();
+    await stopped;
+
+    oscillator.stop();
+    stream.getTracks().forEach((track) => track.stop());
+    destination.stream.getTracks().forEach((track) => track.stop());
+    await audioContext.close();
 
     const blob = new Blob(chunks, { type: "video/webm" });
     return Array.from(new Uint8Array(await blob.arrayBuffer()));
@@ -240,6 +310,40 @@ const readLastConvertedVideoMetadata = async (page: Page) =>
     URL.revokeObjectURL(url);
     return result;
   });
+
+const readLastConvertedVideoBytes = async (page: Page): Promise<Buffer> => {
+  const bytes = await page.evaluate(async () => {
+    const blobs = (window as Window & { __convertedVideoBlobs?: Blob[] }).__convertedVideoBlobs ?? [];
+    const blob = blobs.at(-1);
+    if (!blob) throw new Error("Missing converted video blob");
+    return Array.from(new Uint8Array(await blob.arrayBuffer()));
+  });
+
+  return Buffer.from(bytes);
+};
+
+const inspectVideoContainer = async (bytes: Buffer) => {
+  const input = new Input({
+    source: new BufferSource(bytes),
+    formats: ALL_FORMATS,
+  });
+
+  try {
+    const [audioTracks, duration, videoTracks] = await Promise.all([
+      input.getAudioTracks(),
+      input.computeDuration(),
+      input.getVideoTracks(),
+    ]);
+
+    return {
+      audioTrackCount: audioTracks.length,
+      duration,
+      videoTrackCount: videoTracks.length,
+    };
+  } finally {
+    input.dispose();
+  }
+};
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -638,6 +742,138 @@ test("applies video crop and trim through the Mediabunny edit path", async ({ pa
   expect(metadata.duration).toBeGreaterThan(0.1);
   expect(metadata.duration).toBeLessThan(originalDuration - 0.1);
   expect(metadata.size).toBeGreaterThan(0);
+
+  await guards.assertClean();
+});
+
+test("preserves an audio track through the Mediabunny crop and trim path", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Audio preservation smoke is covered once in Chromium desktop");
+  const guards = installPageGuards(page);
+  const sampleWebm = await createSampleWebmWithAudio(page);
+  const inputInspection = await inspectVideoContainer(sampleWebm);
+  expect(inputInspection.videoTrackCount).toBe(1);
+  expect(inputInspection.audioTrackCount).toBe(1);
+
+  await installConvertedVideoBlobCapture(page);
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "audio-edit-smoke.webm",
+    mimeType: "video/webm",
+    buffer: sampleWebm,
+  });
+
+  await expect(page.getByText("audio-edit-smoke.webm", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Zuschneiden" }).first().click();
+  await expect(page.getByRole("dialog")).toContainText("Video bearbeiten");
+
+  const previewVideo = page.locator("video").first();
+  await expect(previewVideo).toBeVisible();
+  const originalDuration = await previewVideo.evaluate((video: HTMLVideoElement) => video.duration);
+
+  const videoBox = await previewVideo.boundingBox();
+  expect(videoBox).not.toBeNull();
+  await page.mouse.move((videoBox?.x ?? 0) + 8, (videoBox?.y ?? 0) + 8);
+  await page.mouse.down();
+  await page.mouse.move((videoBox?.x ?? 0) + 38, (videoBox?.y ?? 0) + 38, { steps: 5 });
+  await page.mouse.up();
+
+  const endSlider = page.getByRole("slider", { name: "Ende" });
+  await endSlider.focus();
+  for (let pressCount = 0; pressCount < 4; pressCount += 1) {
+    await page.keyboard.press("ArrowLeft");
+  }
+
+  await page.getByRole("button", { name: "Anwenden" }).click();
+  await page.getByRole("button", { name: /^Start$/ }).click();
+  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+
+  const outputInspection = await inspectVideoContainer(await readLastConvertedVideoBytes(page));
+  expect(outputInspection.videoTrackCount).toBe(1);
+  expect(outputInspection.audioTrackCount).toBe(1);
+  expect(outputInspection.duration).toBeGreaterThan(0.1);
+  expect(outputInspection.duration).toBeLessThan(originalDuration - 0.1);
+
+  await guards.assertClean();
+});
+
+test("writes edited video to MP4 through the Mediabunny path", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "MP4 edit smoke is covered once in Chromium desktop");
+  const guards = installPageGuards(page);
+  const sampleWebm = await createSampleWebmWithAudio(page);
+
+  await installConvertedVideoBlobCapture(page);
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "mp4-edit-smoke.webm",
+    mimeType: "video/webm",
+    buffer: sampleWebm,
+  });
+
+  await expect(page.getByText("mp4-edit-smoke.webm", { exact: true })).toBeVisible();
+  await page.getByLabel("Zielformat").click();
+  await page.getByRole("option", { name: /\.mp4/i }).click();
+  await page.getByRole("button", { name: "Zuschneiden" }).first().click();
+  await expect(page.getByRole("dialog")).toContainText("Video bearbeiten");
+
+  const previewVideo = page.locator("video").first();
+  await expect(previewVideo).toBeVisible();
+  const videoBox = await previewVideo.boundingBox();
+  expect(videoBox).not.toBeNull();
+  await page.mouse.move((videoBox?.x ?? 0) + 8, (videoBox?.y ?? 0) + 8);
+  await page.mouse.down();
+  await page.mouse.move((videoBox?.x ?? 0) + 42, (videoBox?.y ?? 0) + 42, { steps: 5 });
+  await page.mouse.up();
+
+  await page.getByRole("button", { name: "Anwenden" }).click();
+  await page.getByRole("button", { name: /^Start$/ }).click();
+  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+
+  const metadata = await readLastConvertedVideoMetadata(page);
+  expect(metadata.type).toBe("video/mp4");
+  expect(metadata.width).toBeGreaterThan(10);
+  expect(metadata.width).toBeLessThan(64);
+
+  const outputInspection = await inspectVideoContainer(await readLastConvertedVideoBytes(page));
+  expect(outputInspection.videoTrackCount).toBe(1);
+  expect(outputInspection.audioTrackCount).toBe(1);
+
+  await guards.assertClean();
+});
+
+test("rotates edited video through the Mediabunny path", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Rotation smoke is covered once in Chromium desktop");
+  const guards = installPageGuards(page);
+  const sampleWebm = await createSampleWebm(page, { width: 80, height: 48 });
+
+  await installConvertedVideoBlobCapture(page);
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "rotate-smoke.webm",
+    mimeType: "video/webm",
+    buffer: sampleWebm,
+  });
+
+  await expect(page.getByText("rotate-smoke.webm", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Zuschneiden" }).first().click();
+  await expect(page.getByRole("dialog")).toContainText("Video bearbeiten");
+  const widthInput = page.getByRole("spinbutton", { name: "Breite", exact: true });
+  const heightInput = page.getByRole("spinbutton", { name: "Höhe", exact: true });
+  const originalWidth = Number(await widthInput.inputValue());
+  const originalHeight = Number(await heightInput.inputValue());
+  await page.getByRole("button", { name: "Rechts drehen" }).click();
+  await expect(page.getByText("90°")).toBeVisible();
+  await expect(widthInput).toHaveValue(String(originalHeight));
+  await expect(heightInput).toHaveValue(String(originalWidth));
+
+  await page.getByRole("button", { name: "Anwenden" }).click();
+  await expect(page.getByText("Gedreht")).toBeVisible();
+  await page.getByRole("button", { name: /^Start$/ }).click();
+  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+
+  const metadata = await readLastConvertedVideoMetadata(page);
+  expect(metadata.type).toBe("video/webm");
+  expect(metadata.width).toBe(toEvenDimension(originalHeight));
+  expect(metadata.height).toBe(toEvenDimension(originalWidth));
 
   await guards.assertClean();
 });
