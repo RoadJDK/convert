@@ -9,6 +9,7 @@
     "build": "astro build",
     "check": "astro check && tsc -p tsconfig.app.json --noEmit",
     "cf:types": "wrangler types src/worker-configuration.d.ts",
+    "assets:bg-removal": "node scripts/install-background-removal-assets.mjs",
     "deploy": "bun run build && wrangler deploy",
     "lint": "eslint .",
     "preview": "astro preview --host 0.0.0.0",

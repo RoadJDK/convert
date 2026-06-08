@@ -39,6 +39,9 @@ build/
 coverage/
 test-results/
 playwright-report/
+
+# Large runtime/model assets installed by `bun run assets:bg-removal`.
+public/vendor/background-removal/
 # End Maibach project artifacts
 
 # Maibach setup files (managed)

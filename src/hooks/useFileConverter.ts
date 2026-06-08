@@ -4,7 +4,7 @@ import { useImageConverter } from './useImageConverter';
 import { useVideoConverter } from './useVideoConverter';
 import { useStatsTracker } from './useStatsTracker';
 import { useRateLimiter } from './useRateLimiter';
-import { removeImageBackground, type BackgroundRemovalConfig } from '@/lib/backgroundRemoval';
+import { removeImageBackgroundWithAssetFallback } from '@/lib/backgroundRemoval';
 import { shouldExtractVideoPreview } from '@/lib/videoPreviewState';
 
 export const useFileConverter = () => {
@@ -138,23 +138,15 @@ export const useFileConverter = () => {
         if (fileItem.type === 'image' && fileItem.removeBackground) {
           updateFile(fileItem.id, { progress: 5 });
           
-          const config: BackgroundRemovalConfig = {
-            // Ensure model + runtime assets resolve correctly.
-            // Default upstream CDN format: https://staticimgly.com/${PACKAGE_NAME}-data/${PACKAGE_VERSION}/dist/
-            publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/',
-            model: 'isnet_fp16',
-            device: 'cpu',
+          const bgBlob = await removeImageBackgroundWithAssetFallback(fileToConvert, {
             progress: (_key: string, current: number, total: number) => {
               const bgProgress = Math.round((current / total) * 40); // 0-40% for BG removal
               updateFile(fileItem.id, { progress: 5 + bgProgress });
             },
-            output: {
-              format: 'image/png',
-              quality: 1.0
-            }
-          };
-
-          const bgBlob = await removeImageBackground(fileToConvert, config);
+            onAssetFallback: (error) => {
+              console.warn('Self-hosted background removal assets unavailable; using versioned remote assets.', error);
+            },
+          });
           fileToConvert = new File([bgBlob], fileItem.file.name, { type: 'image/png' });
         }
 
