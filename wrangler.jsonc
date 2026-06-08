@@ -9,6 +9,12 @@
     "binding": "ASSETS",
     "not_found_handling": "404-page"
   },
+  "routes": [
+    {
+      "pattern": "convert.maibach-systems.ch/*",
+      "zone_name": "maibach-systems.ch"
+    }
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
