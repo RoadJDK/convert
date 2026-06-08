@@ -44,14 +44,14 @@ const parsePdfPageOrder = (value: string): number[] => {
 };
 
 const Index = () => {
-  const { 
-    files, 
+  const {
+    files,
     videoPreviews,
-    addFiles, 
-    convertFile, 
+    addFiles,
+    convertFile,
     removeFile,
     resetFile,
-    downloadFile, 
+    downloadFile,
     updateFileName,
     updateFileSettings,
     updateFileCrop,
@@ -59,19 +59,19 @@ const Index = () => {
     clearAllFiles,
     updateFile,
   } = useFileConverter();
-  
+
   const { generateName, isLoading: aiRenameLoading } = useAIRename();
-  
+
   const [cropDialogFile, setCropDialogFile] = useState<ConvertibleFile | null>(null);
   const [cleanupDialogFile, setCleanupDialogFile] = useState<ConvertibleFile | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const pendingFiles = useMemo(() => files.filter(f => f.status === 'pending'), [files]);
-  const selectedPendingIds = useMemo(() => 
-    selectedIds.filter(id => pendingFiles.some(f => f.id === id)), 
+  const selectedPendingIds = useMemo(() =>
+    selectedIds.filter(id => pendingFiles.some(f => f.id === id)),
     [selectedIds, pendingFiles]
   );
-  
+
   // Determine the type of currently selected files (for exclusive selection)
   const selectedFileType = useMemo((): FileType | null => {
     if (selectedPendingIds.length === 0) return null;
@@ -119,7 +119,7 @@ const Index = () => {
   }, [clearAllFiles]);
 
   const handleCropApply = useCallback((
-    cropArea: CropArea | undefined, 
+    cropArea: CropArea | undefined,
     dimensions?: { width: number; height: number },
     trimRange?: TrimRange,
     videoRotation?: VideoRotation
@@ -159,11 +159,11 @@ const Index = () => {
       setSelectedIds(prev => prev.filter(id => id !== fileId));
       return;
     }
-    
+
     // Get the type of the file being selected
     const fileToSelect = pendingFiles.find(f => f.id === fileId);
     if (!fileToSelect) return;
-    
+
     // If there are already selected files of a different type, clear them first
     if (selectedFileType && selectedFileType !== fileToSelect.type) {
       // Clear selection and select only this new file
@@ -178,7 +178,7 @@ const Index = () => {
     // Select all of the same type as currently selected, or all images if nothing selected
     const targetType = selectedFileType || 'image';
     const filesOfType = pendingFiles.filter(f => f.type === targetType);
-    
+
     if (selectedPendingIds.length === filesOfType.length) {
       setSelectedIds([]);
     } else {
