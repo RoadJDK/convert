@@ -265,6 +265,48 @@ const createSampleWebmWithAudio = async (page: Page): Promise<Buffer> => {
   return Buffer.from(bytes);
 };
 
+const createSampleMp4 = async (page: Page): Promise<Buffer> => {
+  const bytes = await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas unavailable");
+    if (!MediaRecorder.isTypeSupported("video/mp4")) {
+      throw new Error("MP4 MediaRecorder unavailable");
+    }
+
+    const stream = canvas.captureStream(10);
+    const recorder = new MediaRecorder(stream, { mimeType: "video/mp4" });
+    const chunks: Blob[] = [];
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    };
+
+    const stopped = new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve();
+    });
+
+    recorder.start();
+    for (let frame = 0; frame < 12; frame += 1) {
+      context.fillStyle = frame % 2 === 0 ? "#2f6f5e" : "#101318";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = "#f4f0da";
+      context.fillRect(14, 10 + frame, 20, 20);
+      await new Promise((resolve) => window.setTimeout(resolve, 80));
+    }
+    recorder.stop();
+    await stopped;
+    stream.getTracks().forEach((track) => track.stop());
+
+    const blob = new Blob(chunks, { type: "video/mp4" });
+    return Array.from(new Uint8Array(await blob.arrayBuffer()));
+  });
+
+  return Buffer.from(bytes);
+};
+
 const installConvertedVideoBlobCapture = async (page: Page) => {
   await page.evaluate(() => {
     const win = window as Window & {
@@ -838,6 +880,63 @@ test("writes edited video to MP4 through the Mediabunny path", async ({ page }, 
   expect(outputInspection.audioTrackCount).toBe(1);
 
   await guards.assertClean();
+});
+
+test("falls back cleanly for MP4 input when WebCodecs cannot decode the source", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "MP4 input fallback smoke is covered once in Chromium desktop");
+  const mp4RecordingSupported = await page.evaluate(
+    () => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("video/mp4"),
+  );
+  test.skip(!mp4RecordingSupported, "Browser cannot generate a local MP4 fixture");
+
+  const sampleMp4 = await createSampleMp4(page);
+  const inputInspection = await inspectVideoContainer(sampleMp4);
+  expect(inputInspection.videoTrackCount).toBe(1);
+
+  await installConvertedVideoBlobCapture(page);
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "mp4-input-smoke.mp4",
+    mimeType: "video/mp4",
+    buffer: sampleMp4,
+  });
+
+  await expect(page.getByText(/mp4-input-smoke\.mp4/)).toBeVisible();
+  await page.getByRole("button", { name: "Zuschneiden" }).first().click();
+  await expect(page.getByRole("dialog")).toContainText("Video bearbeiten");
+
+  const previewVideo = page.locator("video").first();
+  await expect(previewVideo).toBeVisible();
+  const originalDuration = await previewVideo.evaluate((video: HTMLVideoElement) => video.duration);
+  const videoBox = await previewVideo.boundingBox();
+  expect(videoBox).not.toBeNull();
+  await page.mouse.move((videoBox?.x ?? 0) + 8, (videoBox?.y ?? 0) + 8);
+  await page.mouse.down();
+  await page.mouse.move((videoBox?.x ?? 0) + 38, (videoBox?.y ?? 0) + 38, { steps: 5 });
+  await page.mouse.up();
+
+  const endSlider = page.getByRole("slider", { name: "Ende" });
+  await endSlider.focus();
+  for (let pressCount = 0; pressCount < 4; pressCount += 1) {
+    await page.keyboard.press("ArrowLeft");
+  }
+
+  await page.getByRole("button", { name: "Anwenden" }).click();
+  await page.getByRole("button", { name: /^Start$/ }).click();
+  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+
+  const metadata = await readLastConvertedVideoMetadata(page);
+  expect(metadata.type).toBe("video/webm");
+
+  const outputInspection = await inspectVideoContainer(await readLastConvertedVideoBytes(page));
+  expect(outputInspection.videoTrackCount).toBe(1);
+  expect(outputInspection.duration).toBeGreaterThan(0.1);
+  expect(outputInspection.duration).toBeLessThan(originalDuration - 0.1);
+
+  const hasHorizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(hasHorizontalOverflow).toBe(false);
 });
 
 test("rotates edited video through the Mediabunny path", async ({ page }, testInfo) => {
