@@ -2,19 +2,20 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { FileCardPreview } from "@/components/file-card/FileCardPreview";
-import { DEFAULT_QUALITY_SETTINGS, type ConvertibleFile } from "@/types/converter";
+import { DEFAULT_PDF_QUALITY_SETTINGS, DEFAULT_QUALITY_SETTINGS, type ConvertibleFile, type FileType } from "@/types/converter";
 
-const makeFile = (type: "image" | "video" = "image"): ConvertibleFile => {
-  const mimeType = type === "image" ? "image/png" : "video/webm";
+const makeFile = (type: FileType = "image"): ConvertibleFile => {
+  const mimeType = type === "image" ? "image/png" : type === "video" ? "video/webm" : "application/pdf";
+  const extension = type === "image" ? "png" : type === "video" ? "webm" : "pdf";
 
   return {
     id: `${type}-preview`,
-    file: new File(["sample"], `sample.${type === "image" ? "png" : "webm"}`, { type: mimeType }),
+    file: new File(["sample"], `sample.${extension}`, { type: mimeType }),
     type,
     status: "pending",
     progress: 0,
-    originalName: `sample.${type === "image" ? "png" : "webm"}`,
-    qualitySettings: { ...DEFAULT_QUALITY_SETTINGS },
+    originalName: `sample.${extension}`,
+    qualitySettings: type === "pdf" ? { ...DEFAULT_PDF_QUALITY_SETTINGS } : { ...DEFAULT_QUALITY_SETTINGS },
     originalSize: 6,
   };
 };
@@ -42,6 +43,17 @@ describe("FileCardPreview", () => {
     expect(preview.className).toContain("justify-center");
     expect(marker.className).toContain("left-1/2");
     expect(marker.className).toContain("top-1/2");
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("uses the centered fallback marker for PDFs", () => {
+    render(<FileCardPreview file={makeFile("pdf")} />);
+
+    const preview = screen.getByTestId("file-card-preview");
+    const marker = screen.getByTestId("file-card-preview-type-icon");
+
+    expect(preview.className).toContain("items-center");
+    expect(marker.className).toContain("left-1/2");
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 });

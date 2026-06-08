@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useEffect, useState } from 'react';
 import { EMPTY_LOCAL_STATS, readLocalStats, type LocalStats } from '@/lib/localStats';
-import { ImageFormatIcon, RenameSparkIcon, TrendStatsIcon, VideoTimelineIcon } from '@/components/icons/MediaConvertIcons';
+import { BatchFilesIcon, ImageFormatIcon, RenameSparkIcon, TrendStatsIcon, VideoTimelineIcon } from '@/components/icons/MediaConvertIcons';
 
 interface StatsPopupProps {
   open: boolean;
@@ -17,7 +17,7 @@ export const StatsPopup = ({ open, onClose }: StatsPopupProps) => {
     }
   }, [open]);
 
-  const totalConversions = stats.imagesConverted + stats.videosConverted;
+  const totalConversions = stats.imagesConverted + stats.videosConverted + stats.pdfsConverted;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -40,7 +40,7 @@ export const StatsPopup = ({ open, onClose }: StatsPopupProps) => {
             </div>
 
             {/* Individual stats */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-lg bg-card border border-border p-3 text-center">
                 <div className="flex justify-center mb-2">
                   <div className="rounded-full bg-primary/10 p-2">
@@ -59,6 +59,16 @@ export const StatsPopup = ({ open, onClose }: StatsPopupProps) => {
                 </div>
                 <p className="text-2xl font-semibold">{stats.videosConverted}</p>
                 <p className="text-xs text-muted-foreground">Videos</p>
+              </div>
+
+              <div className="rounded-lg bg-card border border-border p-3 text-center">
+                <div className="flex justify-center mb-2">
+                  <div className="rounded-full bg-primary/10 p-2">
+                    <BatchFilesIcon className="h-4 w-4 text-primary" />
+                  </div>
+                </div>
+                <p className="text-2xl font-semibold">{stats.pdfsConverted}</p>
+                <p className="text-xs text-muted-foreground">PDFs</p>
               </div>
 
               <div className="rounded-lg bg-card border border-border p-3 text-center">

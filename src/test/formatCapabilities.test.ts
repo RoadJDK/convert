@@ -27,9 +27,18 @@ describe("format capabilities", () => {
   it("keeps output format facts scoped by file type", () => {
     expect(getDefaultOutputFormat("image")).toBe("webp");
     expect(getDefaultOutputFormat("video")).toBe("webm");
+    expect(getDefaultOutputFormat("pdf")).toBe("pdf");
     expect(getOutputFormatOptions("image").map((format) => format.value)).toContain("svg");
     expect(getOutputFormatOptions("video").map((format) => format.value)).toEqual(["webm", "mp4"]);
+    expect(getOutputFormatOptions("pdf").map((format) => format.value)).toEqual(["pdf"]);
     expect(getOutputMimeTypeForFormat("image", "gif")).toBe("image/gif");
     expect(getOutputMimeTypeForFormat("video", "mp4")).toBe("video/mp4");
+    expect(getOutputMimeTypeForFormat("pdf", "pdf")).toBe("application/pdf");
+  });
+
+  it("detects PDFs from MIME type and file extension fallback", () => {
+    expect(detectFileType(new File(["%PDF"], "contract.pdf", { type: "application/pdf" }))).toBe("pdf");
+    expect(detectFileType(new File(["%PDF"], "scanned.PDF", { type: "" }))).toBe("pdf");
+    expect(getFileType(new File(["%PDF"], "document.bin", { type: "application/pdf" }))).toBe("pdf");
   });
 });

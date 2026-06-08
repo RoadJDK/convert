@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { ALL_FORMATS, BufferSource, Input } from "mediabunny";
+import { PDFDocument, rgb } from "pdf-lib";
 
 const SAMPLE_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAdklEQVR4nO3QQQ3AIADAQMAKljLDf5O43Hgw7KUXsHfvewCx78sBEA0gGkA0gGgA0QCiAUQDiAYQDSAaQDSAaADRANIAogFEA4gGEA0gGkA0gGgA0QCiAUQDiAYQDSAaQDSAaADRANIAogFEA4gGEA0gGkA0gGgA0QCiAUQDiH4OawLYl/8YWwAAAABJRU5ErkJggg==",
@@ -41,6 +42,25 @@ const createCornerWatermarkPng = async (page: Page): Promise<Buffer> => {
     return Array.from(new Uint8Array(await blob.arrayBuffer()));
   });
 
+  return Buffer.from(bytes);
+};
+
+const createPdfFixture = async (name: string, pageCount: number, title: string): Promise<Buffer> => {
+  const pdf = await PDFDocument.create();
+  pdf.setTitle(title);
+  pdf.setAuthor("Private Author");
+
+  for (let index = 0; index < pageCount; index += 1) {
+    const page = pdf.addPage([240, 160]);
+    page.drawText(`${name} page ${index + 1}`, {
+      color: rgb(0.12, 0.18, 0.24),
+      size: 14,
+      x: 28,
+      y: 96,
+    });
+  }
+
+  const bytes = await pdf.save();
   return Buffer.from(bytes);
 };
 
@@ -361,6 +381,38 @@ const installConvertedVideoBlobCapture = async (page: Page) => {
   });
 };
 
+const installConvertedPdfBlobCapture = async (page: Page) => {
+  await page.evaluate(() => {
+    const win = window as Window & {
+      __convertedPdfBlobs?: Blob[];
+      __originalCreateObjectURL?: typeof URL.createObjectURL;
+    };
+
+    if (!win.__originalCreateObjectURL) {
+      win.__originalCreateObjectURL = URL.createObjectURL.bind(URL);
+    }
+
+    win.__convertedPdfBlobs = [];
+    URL.createObjectURL = (object: Blob | MediaSource) => {
+      if (object instanceof Blob && object.type === "application/pdf") {
+        win.__convertedPdfBlobs?.push(object);
+      }
+      return win.__originalCreateObjectURL?.(object) ?? "";
+    };
+  });
+};
+
+const readLastConvertedPdfBytes = async (page: Page): Promise<Buffer> => {
+  const bytes = await page.evaluate(async () => {
+    const blobs = (window as Window & { __convertedPdfBlobs?: Blob[] }).__convertedPdfBlobs ?? [];
+    const blob = blobs.at(-1);
+    if (!blob) throw new Error("Missing converted PDF blob");
+    return Array.from(new Uint8Array(await blob.arrayBuffer()));
+  });
+
+  return Buffer.from(bytes);
+};
+
 const readLastConvertedVideoMetadata = async (page: Page) =>
   page.evaluate(async () => {
     const blobs = (window as Window & { __convertedVideoBlobs?: Blob[] }).__convertedVideoBlobs ?? [];
@@ -555,6 +607,46 @@ test("converts an image locally and records local stats", async ({ page }) => {
 
   const stats = await page.evaluate(() => localStorage.getItem("maibach_convert_stats"));
   expect(stats).toContain('"imagesConverted":1');
+
+  await guards.assertClean();
+});
+
+test("merges selected PDFs locally without upload", async ({ page }) => {
+  const guards = installPageGuards(page);
+  const writeRequests: string[] = [];
+  page.on("request", (request) => {
+    if (["POST", "PUT", "PATCH"].includes(request.method())) {
+      writeRequests.push(`${request.method()} ${request.url()}`);
+    }
+  });
+  await installConvertedPdfBlobCapture(page);
+
+  await page.locator('input[type="file"]').setInputFiles([
+    {
+      name: "contract.pdf",
+      mimeType: "application/pdf",
+      buffer: await createPdfFixture("contract", 1, "Private Contract"),
+    },
+    {
+      name: "invoice.pdf",
+      mimeType: "application/pdf",
+      buffer: await createPdfFixture("invoice", 2, "Private Invoice"),
+    },
+  ]);
+
+  await expect(page.locator('[title="contract.pdf"]')).toBeVisible();
+  await expect(page.locator('[title="invoice.pdf"]')).toBeVisible();
+  await page.getByRole("button", { name: "PDFs (2)" }).click();
+  await expect(page.getByText(/Zusammenführen läuft lokal im Browser/i)).toBeVisible();
+  await page.getByRole("button", { name: "PDFs zusammenführen" }).click();
+  await expect(page.locator('[title="merged-2-pdfs.pdf"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+
+  const output = await PDFDocument.load(await readLastConvertedPdfBytes(page));
+  expect(output.getPageCount()).toBe(3);
+  expect(output.getTitle()).toBe("Maibach Convert PDF");
+  expect(output.getAuthor()).toBe("Maibach Convert");
+  expect(writeRequests).toEqual([]);
 
   await guards.assertClean();
 });

@@ -1,11 +1,31 @@
 import { useState, useCallback, useEffect } from 'react';
-import { ConvertibleFile, getFileType, getOutputExtension, QualitySettings, CropArea, TrimRange, DEFAULT_QUALITY_SETTINGS, DEFAULT_VIDEO_QUALITY_SETTINGS, ImageOutputFormat, VideoRotation } from '@/types/converter';
+import {
+  ConvertibleFile,
+  getFileType,
+  getOutputExtension,
+  QualitySettings,
+  CropArea,
+  TrimRange,
+  DEFAULT_QUALITY_SETTINGS,
+  DEFAULT_VIDEO_QUALITY_SETTINGS,
+  DEFAULT_PDF_QUALITY_SETTINGS,
+  ImageOutputFormat,
+  VideoRotation,
+  FileType,
+} from '@/types/converter';
 import { useImageConverter } from './useImageConverter';
 import { useVideoConverter } from './useVideoConverter';
 import { useStatsTracker } from './useStatsTracker';
 import { useRateLimiter } from './useRateLimiter';
 import { removeImageBackgroundWithAssetFallback } from '@/lib/backgroundRemoval';
 import { shouldExtractVideoPreview } from '@/lib/videoPreviewState';
+import { stripPdfMetadata } from '@/lib/pdfOperations';
+
+const getDefaultQualitySettingsForType = (type: FileType): QualitySettings => {
+  if (type === 'video') return { ...DEFAULT_VIDEO_QUALITY_SETTINGS };
+  if (type === 'pdf') return { ...DEFAULT_PDF_QUALITY_SETTINGS };
+  return { ...DEFAULT_QUALITY_SETTINGS };
+};
 
 export const useFileConverter = () => {
   const [files, setFiles] = useState<ConvertibleFile[]>([]);
@@ -38,10 +58,7 @@ export const useFileConverter = () => {
         const type = getFileType(file);
         if (!type) return null;
 
-        // Use appropriate default settings based on file type
-        const defaultSettings = type === 'video' 
-          ? { ...DEFAULT_VIDEO_QUALITY_SETTINGS }
-          : { ...DEFAULT_QUALITY_SETTINGS };
+        const defaultSettings = getDefaultQualitySettingsForType(type);
 
         return {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -183,6 +200,11 @@ export const useFileConverter = () => {
 
         if (fileItem.type === 'image') {
           result = await convertImage(fileToConvert, onProgress, options);
+        } else if (fileItem.type === 'pdf') {
+          updateFile(fileItem.id, { progress: 35 });
+          const blob = await stripPdfMetadata(fileItem.file);
+          updateFile(fileItem.id, { progress: 85 });
+          result = { blob, url: URL.createObjectURL(blob) };
         } else {
           result = await convertToWebM(fileItem.file, onProgress, options);
         }
@@ -240,7 +262,7 @@ export const useFileConverter = () => {
             convertedUrl: undefined,
             convertedSize: undefined,
             error: undefined,
-            qualitySettings: { ...DEFAULT_QUALITY_SETTINGS },
+            qualitySettings: getDefaultQualitySettingsForType(f.type),
             cropArea: undefined,
             cleanupArea: undefined,
             cleanupMask: undefined,

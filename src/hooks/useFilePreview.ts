@@ -39,7 +39,7 @@ export function useFilePreview(file: ConvertibleFile, videoPreviewUrl?: string) 
             setPreviewUrl(null);
           }
         });
-    } else {
+    } else if (file.type === "video") {
       const url = URL.createObjectURL(file.file);
       const video = document.createElement("video");
       releasePreview = () => URL.revokeObjectURL(url);
@@ -61,6 +61,6 @@ export function useFilePreview(file: ConvertibleFile, videoPreviewUrl?: string) 
 
   return {
     originalDimensions,
-    showPreview: file.type === "image" ? previewUrl : videoPreviewUrl,
+    showPreview: file.type === "image" ? previewUrl : file.type === "video" ? videoPreviewUrl : null,
   };
 }

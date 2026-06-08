@@ -1,5 +1,5 @@
 import { ConvertibleFile } from '@/types/converter';
-import { ConversionDoneIcon, ImageFormatIcon, VideoTimelineIcon, WaitingQueueIcon } from '@/components/icons/MediaConvertIcons';
+import { BatchFilesIcon, ConversionDoneIcon, ImageFormatIcon, VideoTimelineIcon, WaitingQueueIcon } from '@/components/icons/MediaConvertIcons';
 
 interface StatsProps {
   files: ConvertibleFile[];
@@ -8,6 +8,7 @@ interface StatsProps {
 export const Stats = ({ files }: StatsProps) => {
   const images = files.filter((f) => f.type === 'image');
   const videos = files.filter((f) => f.type === 'video');
+  const pdfs = files.filter((f) => f.type === 'pdf');
   const completed = files.filter((f) => f.status === 'completed');
   const pending = files.filter((f) => f.status === 'pending' || f.status === 'converting');
 
@@ -32,6 +33,16 @@ export const Stats = ({ files }: StatsProps) => {
         <div>
           <p className="text-lg font-semibold text-foreground">{videos.length}</p>
           <p className="text-xs text-muted-foreground">Videos</p>
+        </div>
+      </div>
+
+      <div className="glass-panel flex items-center gap-3 rounded-xl p-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15">
+          <BatchFilesIcon className="h-4 w-4 text-primary" />
+        </div>
+        <div>
+          <p className="text-lg font-semibold text-foreground">{pdfs.length}</p>
+          <p className="text-xs text-muted-foreground">PDFs</p>
         </div>
       </div>
 

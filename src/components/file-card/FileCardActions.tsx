@@ -57,9 +57,15 @@ export function FileCardActions({
   onCleanupAreaClick,
 }: FileCardActionsProps) {
   const toolButtonClass = "h-11 w-11 p-0 text-muted-foreground hover:text-foreground sm:h-8 sm:w-8";
+  const supportsMediaTools = file.type !== "pdf";
+  const showsAIRename = Boolean(onAIRename) && supportsMediaTools;
   const pendingActionGridClass = cn(
     "grid w-full justify-between gap-2 sm:flex sm:w-auto sm:items-center sm:justify-end sm:gap-1",
-    onAIRename ? "grid-cols-[74px_repeat(4,44px)]" : "grid-cols-[74px_repeat(3,44px)]",
+    supportsMediaTools
+      ? showsAIRename
+        ? "grid-cols-[74px_repeat(4,44px)]"
+        : "grid-cols-[74px_repeat(3,44px)]"
+      : "grid-cols-[74px_44px]",
   );
 
   const renderRemoveButton = (className?: string) => (
@@ -88,33 +94,37 @@ export function FileCardActions({
               onChange={(format: OutputFormat) => onSettingsChange({ ...file.qualitySettings, outputFormat: format })}
             />
           </div>
-          <QualitySettingsComponent
-            settings={file.qualitySettings}
-            onChange={onSettingsChange}
-            originalSize={file.originalSize}
-            originalFormat={file.file.type}
-            originalDimensions={originalDimensions}
-            cropArea={file.cropArea}
-            fileType={file.type}
-            removeBackground={removeBackgroundEnabled}
-            onRemoveBackgroundChange={onToggleRemoveBackground}
-            removeWatermark={removeWatermarkEnabled}
-            onRemoveWatermarkChange={onToggleRemoveWatermark}
-            cleanupArea={cleanupArea}
-            cleanupMask={cleanupMask}
-            onCleanupAreaClick={onCleanupAreaClick}
-          />
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onCropClick}
-            className={toolButtonClass}
-            aria-label="Zuschneiden"
-            title="Zuschneiden"
-          >
-            <CropFrameIcon className="h-4 w-4" />
-          </Button>
-          {onAIRename && (
+          {supportsMediaTools && (
+            <QualitySettingsComponent
+              settings={file.qualitySettings}
+              onChange={onSettingsChange}
+              originalSize={file.originalSize}
+              originalFormat={file.file.type}
+              originalDimensions={originalDimensions}
+              cropArea={file.cropArea}
+              fileType={file.type}
+              removeBackground={removeBackgroundEnabled}
+              onRemoveBackgroundChange={onToggleRemoveBackground}
+              removeWatermark={removeWatermarkEnabled}
+              onRemoveWatermarkChange={onToggleRemoveWatermark}
+              cleanupArea={cleanupArea}
+              cleanupMask={cleanupMask}
+              onCleanupAreaClick={onCleanupAreaClick}
+            />
+          )}
+          {supportsMediaTools && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onCropClick}
+              className={toolButtonClass}
+              aria-label="Zuschneiden"
+              title="Zuschneiden"
+            >
+              <CropFrameIcon className="h-4 w-4" />
+            </Button>
+          )}
+          {showsAIRename && (
             <Button
               size="icon"
               variant="ghost"

@@ -2,8 +2,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { 
   FileType, 
   OutputFormat, 
-  IMAGE_OUTPUT_FORMATS, 
-  VIDEO_OUTPUT_FORMATS,
+  getOutputFormatOptions,
+  getDefaultOutputFormat,
   getOutputExtension
 } from '@/types/converter';
 
@@ -15,8 +15,8 @@ interface FormatSelectorProps {
 }
 
 export const FormatSelector = ({ fileType, currentFormat, onChange, disabled }: FormatSelectorProps) => {
-  const formatOptions = fileType === 'image' ? IMAGE_OUTPUT_FORMATS : VIDEO_OUTPUT_FORMATS;
-  const defaultFormat = fileType === 'image' ? 'webp' : 'webm';
+  const formatOptions = getOutputFormatOptions(fileType);
+  const defaultFormat = getDefaultOutputFormat(fileType);
   const format = currentFormat || defaultFormat;
   const extension = getOutputExtension(fileType, format);
 

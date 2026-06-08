@@ -1,14 +1,18 @@
 import {
   detectFileType,
+  getDefaultOutputFormat as getDefaultOutputFormatForType,
   getOutputExtensionForFormat,
+  getOutputFormatOptions as getOutputFormatOptionsForType,
   getOutputMimeTypeForFormat,
   IMAGE_OUTPUT_OPTIONS,
+  PDF_OUTPUT_OPTIONS,
+  SUPPORTED_PDF_MIME_TYPES,
   SUPPORTED_IMAGE_MIME_TYPES,
   SUPPORTED_VIDEO_MIME_TYPES,
   VIDEO_OUTPUT_OPTIONS,
 } from '@/lib/formatCapabilities';
 
-export type FileType = 'image' | 'video';
+export type FileType = 'image' | 'video' | 'pdf';
 
 export type ConversionStatus = 'pending' | 'converting' | 'completed' | 'error';
 
@@ -16,7 +20,8 @@ export type QualityMode = 'percentage' | 'maxSize';
 
 export type ImageOutputFormat = 'webp' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'avif' | 'svg';
 export type VideoOutputFormat = 'webm' | 'mp4';
-export type OutputFormat = ImageOutputFormat | VideoOutputFormat;
+export type PdfOutputFormat = 'pdf';
+export type OutputFormat = ImageOutputFormat | VideoOutputFormat | PdfOutputFormat;
 export type VideoRotation = 0 | 90 | 180 | 270;
 
 export interface QualitySettings {
@@ -104,8 +109,17 @@ export const DEFAULT_VIDEO_QUALITY_SETTINGS: QualitySettings = {
   outputFormat: 'webm', // Default output format for videos
 };
 
+export const DEFAULT_PDF_QUALITY_SETTINGS: QualitySettings = {
+  mode: 'percentage',
+  percentage: 100,
+  maxSizeKB: 5000,
+  scale: 100,
+  outputFormat: 'pdf',
+};
+
 export const SUPPORTED_IMAGE_FORMATS = SUPPORTED_IMAGE_MIME_TYPES;
 export const SUPPORTED_VIDEO_FORMATS = SUPPORTED_VIDEO_MIME_TYPES;
+export const SUPPORTED_PDF_FORMATS = SUPPORTED_PDF_MIME_TYPES;
 
 export const getFileType = (file: File): FileType | null => {
   return detectFileType(file);
@@ -119,8 +133,17 @@ export const getOutputMimeType = (type: FileType, format?: OutputFormat): string
   return getOutputMimeTypeForFormat(type, format);
 };
 
+export const getDefaultOutputFormat = (type: FileType): OutputFormat => {
+  return getDefaultOutputFormatForType(type);
+};
+
+export const getOutputFormatOptions = (type: FileType) => {
+  return getOutputFormatOptionsForType(type);
+};
+
 export const IMAGE_OUTPUT_FORMATS = IMAGE_OUTPUT_OPTIONS;
 export const VIDEO_OUTPUT_FORMATS = VIDEO_OUTPUT_OPTIONS;
+export const PDF_OUTPUT_FORMATS = PDF_OUTPUT_OPTIONS;
 
 export const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;

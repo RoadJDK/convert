@@ -146,7 +146,9 @@ export const FileCard = ({
 
           {file.status === "pending" && (
             <p className="mt-1 text-xs text-muted-foreground">
-              Qualität: {file.qualitySettings.mode === "percentage" ? `${file.qualitySettings.percentage}%` : `max ${file.qualitySettings.maxSizeKB} KB`}
+              {file.type === "pdf"
+                ? "PDF: lokal neu schreiben und Metadaten entfernen"
+                : `Qualität: ${file.qualitySettings.mode === "percentage" ? `${file.qualitySettings.percentage}%` : `max ${file.qualitySettings.maxSizeKB} KB`}`}
             </p>
           )}
 

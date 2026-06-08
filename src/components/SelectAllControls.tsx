@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConvertibleFile, FileType } from '@/types/converter';
-import { CloseSelectionIcon, ImageFormatIcon, VideoTimelineIcon } from '@/components/icons/MediaConvertIcons';
+import { BatchFilesIcon, CloseSelectionIcon, ImageFormatIcon, VideoTimelineIcon } from '@/components/icons/MediaConvertIcons';
 
 interface SelectAllControlsProps {
   pendingFiles: ConvertibleFile[];
@@ -26,6 +26,11 @@ export const SelectAllControls = ({
     [pendingFiles]
   );
 
+  const pdfCount = useMemo(() =>
+    pendingFiles.filter(f => f.type === 'pdf').length,
+    [pendingFiles]
+  );
+
   const selectedType = useMemo((): FileType | null => {
     if (selectedPendingIds.length === 0) return null;
     const firstSelected = pendingFiles.find(f => selectedPendingIds.includes(f.id));
@@ -40,6 +45,11 @@ export const SelectAllControls = ({
   const allVideosSelected = useMemo(() => {
     const videoFiles = pendingFiles.filter(f => f.type === 'video');
     return videoFiles.length > 0 && videoFiles.every(f => selectedPendingIds.includes(f.id));
+  }, [pendingFiles, selectedPendingIds]);
+
+  const allPdfsSelected = useMemo(() => {
+    const pdfFiles = pendingFiles.filter(f => f.type === 'pdf');
+    return pdfFiles.length > 0 && pdfFiles.every(f => selectedPendingIds.includes(f.id));
   }, [pendingFiles, selectedPendingIds]);
 
   return (
@@ -67,6 +77,18 @@ export const SelectAllControls = ({
         >
           <VideoTimelineIcon className="h-3.5 w-3.5" />
           Videos ({videoCount})
+        </Button>
+      )}
+
+      {pdfCount > 0 && (
+        <Button
+          size="sm"
+          variant={allPdfsSelected ? "default" : "outline"}
+          className="h-8 gap-1.5 text-xs"
+          onClick={() => onSelectType('pdf')}
+        >
+          <BatchFilesIcon className="h-3.5 w-3.5" />
+          PDFs ({pdfCount})
         </Button>
       )}
 

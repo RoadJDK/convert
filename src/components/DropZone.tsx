@@ -1,7 +1,7 @@
 import { useCallback, useId, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { SUPPORTED_IMAGE_FORMATS, SUPPORTED_VIDEO_FORMATS, getFileType } from '@/types/converter';
-import { ImageFormatIcon, ImportStackIcon, VideoTimelineIcon } from '@/components/icons/MediaConvertIcons';
+import { SUPPORTED_IMAGE_FORMATS, SUPPORTED_PDF_FORMATS, SUPPORTED_VIDEO_FORMATS, getFileType } from '@/types/converter';
+import { BatchFilesIcon, ImageFormatIcon, ImportStackIcon, VideoTimelineIcon } from '@/components/icons/MediaConvertIcons';
 
 interface DropZoneProps {
   hasFiles?: boolean;
@@ -44,6 +44,10 @@ const SupportedFormatList = ({ compact = false }: DropZoneVisualProps) => (
     <div className="flex items-center gap-2">
       <VideoTimelineIcon className="h-4 w-4" />
       <span>MP4, WebM, MOV, MKV</span>
+    </div>
+    <div className="flex items-center gap-2">
+      <BatchFilesIcon className="h-4 w-4" />
+      <span>PDF</span>
     </div>
   </div>
 );
@@ -109,7 +113,7 @@ export const DropZone = ({ hasFiles = false, onFilesAdded }: DropZoneProps) => {
     [onFilesAdded]
   );
 
-  const acceptedFormats = [...SUPPORTED_IMAGE_FORMATS, ...SUPPORTED_VIDEO_FORMATS].join(',');
+  const acceptedFormats = [...SUPPORTED_IMAGE_FORMATS, ...SUPPORTED_VIDEO_FORMATS, ...SUPPORTED_PDF_FORMATS].join(',');
 
   return (
     <label
@@ -148,7 +152,7 @@ export const DropZone = ({ hasFiles = false, onFilesAdded }: DropZoneProps) => {
         <div className="min-w-0">
           <h3 className="text-xl font-semibold text-foreground">Dateien hierher ziehen</h3>
           <p className="mb-4 mt-2 text-sm text-muted-foreground">
-            oder klicken und mehrere Bilder oder Videos auswählen
+            oder klicken und mehrere Bilder, Videos oder PDFs auswählen
           </p>
 
           <SupportedFormatList />
@@ -168,7 +172,7 @@ export const DropZone = ({ hasFiles = false, onFilesAdded }: DropZoneProps) => {
             <div>
               <h3 className="text-base font-semibold text-foreground">Weitere Dateien hinzufügen</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                oder klicken und mehrere Bilder oder Videos auswählen
+                oder klicken und mehrere Bilder, Videos oder PDFs auswählen
               </p>
             </div>
 

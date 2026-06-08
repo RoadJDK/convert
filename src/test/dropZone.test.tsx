@@ -30,6 +30,16 @@ describe("DropZone", () => {
     expect(dropZone).toHaveAttribute("for", fileInput.id);
   });
 
+  it("advertises and accepts PDFs alongside images and videos", () => {
+    render(<DropZone onFilesAdded={vi.fn()} />);
+
+    const fileInput = screen.getByLabelText(/Dateien hierher ziehen/i);
+
+    expect(fileInput).toHaveAttribute("accept", expect.stringContaining("application/pdf"));
+    expect(screen.getAllByText("PDF").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Bilder, Videos oder PDFs/i).length).toBeGreaterThan(0);
+  });
+
   it("uses a compact animated layout once files exist", () => {
     render(<DropZone hasFiles onFilesAdded={vi.fn()} />);
 

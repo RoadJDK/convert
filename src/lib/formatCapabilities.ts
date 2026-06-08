@@ -2,6 +2,7 @@ import type {
   FileType,
   ImageOutputFormat,
   OutputFormat,
+  PdfOutputFormat,
   VideoOutputFormat,
 } from "@/types/converter";
 
@@ -114,13 +115,23 @@ const VIDEO_CAPABILITIES: readonly FormatCapability[] = [
   },
 ] as const;
 
+const PDF_CAPABILITIES: readonly FormatCapability[] = [
+  {
+    type: "pdf",
+    mimeTypes: ["application/pdf"],
+    extensions: ["pdf"],
+  },
+] as const;
+
 export const INPUT_FORMAT_CAPABILITIES = [
   ...IMAGE_CAPABILITIES,
   ...VIDEO_CAPABILITIES,
+  ...PDF_CAPABILITIES,
 ] as const;
 
 export const SUPPORTED_IMAGE_MIME_TYPES = IMAGE_CAPABILITIES.flatMap((format) => format.mimeTypes);
 export const SUPPORTED_VIDEO_MIME_TYPES = VIDEO_CAPABILITIES.flatMap((format) => format.mimeTypes);
+export const SUPPORTED_PDF_MIME_TYPES = PDF_CAPABILITIES.flatMap((format) => format.mimeTypes);
 
 export const IMAGE_OUTPUT_OPTIONS: readonly OutputFormatOption<ImageOutputFormat>[] = [
   { value: "webp", label: "WebP", extension: "webp", mimeType: "image/webp" },
@@ -137,6 +148,10 @@ export const VIDEO_OUTPUT_OPTIONS: readonly OutputFormatOption<VideoOutputFormat
   { value: "mp4", label: "MP4", extension: "mp4", mimeType: "video/mp4" },
 ] as const;
 
+export const PDF_OUTPUT_OPTIONS: readonly OutputFormatOption<PdfOutputFormat>[] = [
+  { value: "pdf", label: "PDF", extension: "pdf", mimeType: "application/pdf" },
+] as const;
+
 export function detectFileType(file: File): FileType | null {
   const mimeType = file.type.toLowerCase();
   const extension = getExtension(file.name);
@@ -150,11 +165,15 @@ export function detectFileType(file: File): FileType | null {
 }
 
 export function getDefaultOutputFormat(type: FileType): OutputFormat {
-  return type === "image" ? "webp" : "webm";
+  if (type === "image") return "webp";
+  if (type === "video") return "webm";
+  return "pdf";
 }
 
 export function getOutputFormatOptions(type: FileType): readonly OutputFormatOption<OutputFormat>[] {
-  return type === "image" ? IMAGE_OUTPUT_OPTIONS : VIDEO_OUTPUT_OPTIONS;
+  if (type === "image") return IMAGE_OUTPUT_OPTIONS;
+  if (type === "video") return VIDEO_OUTPUT_OPTIONS;
+  return PDF_OUTPUT_OPTIONS;
 }
 
 export function getOutputExtensionForFormat(type: FileType, format?: OutputFormat): string {

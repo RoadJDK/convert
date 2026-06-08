@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { ConvertibleFile } from "@/types/converter";
-import { ImageFormatIcon, VideoTimelineIcon } from "@/components/icons/MediaConvertIcons";
+import { BatchFilesIcon, ImageFormatIcon, VideoTimelineIcon } from "@/components/icons/MediaConvertIcons";
 
 type FileCardPreviewProps = {
   file: ConvertibleFile;
@@ -8,14 +8,24 @@ type FileCardPreviewProps = {
 };
 
 export function FileCardPreview({ file, previewUrl }: FileCardPreviewProps) {
-  const isImage = file.type === "image";
+  const typeClass = file.type === "image"
+    ? "bg-primary/15"
+    : file.type === "video"
+      ? "bg-accent/15"
+      : "bg-primary/10";
+  const iconClass = file.type === "image"
+    ? "bg-primary text-primary-foreground"
+    : file.type === "video"
+      ? "bg-accent text-accent-foreground"
+      : "bg-primary text-primary-foreground";
+  const TypeIcon = file.type === "image" ? ImageFormatIcon : file.type === "video" ? VideoTimelineIcon : BatchFilesIcon;
 
   return (
     <div className="relative shrink-0">
       <div
         className={cn(
           "relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg sm:h-12 sm:w-12",
-          isImage ? "bg-primary/15" : "bg-accent/15",
+          typeClass,
         )}
         data-testid="file-card-preview"
       >
@@ -23,11 +33,11 @@ export function FileCardPreview({ file, previewUrl }: FileCardPreviewProps) {
         <div
           className={cn(
             "absolute left-1/2 top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-md border border-background/70 shadow-sm sm:h-7 sm:w-7",
-            isImage ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground",
+            iconClass,
           )}
           data-testid="file-card-preview-type-icon"
         >
-          {isImage ? <ImageFormatIcon className="h-3.5 w-3.5" /> : <VideoTimelineIcon className="h-3.5 w-3.5" />}
+          <TypeIcon className="h-3.5 w-3.5" />
         </div>
       </div>
     </div>

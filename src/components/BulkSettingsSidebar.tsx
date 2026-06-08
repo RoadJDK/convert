@@ -4,8 +4,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { QualitySettings, QualityMode } from '@/types/converter';
+import { FileType, QualitySettings, QualityMode } from '@/types/converter';
 import {
+  BatchFilesIcon,
   LoaderRingIcon,
   MaxSizeIcon,
   PercentBadgeIcon,
@@ -15,19 +16,23 @@ import {
 interface BulkSettingsSidebarProps {
   open: boolean;
   selectedCount: number;
+  selectedType?: FileType | null;
   onApply: (settings: Partial<{ qualitySettings: QualitySettings }>) => void;
   onClose: () => void;
   onAIRenameAll?: () => void;
   isAIRenaming?: boolean;
+  onMergePdfs?: () => void;
 }
 
 export const BulkSettingsSidebar = ({
   open,
   selectedCount,
+  selectedType,
   onApply,
   onClose,
   onAIRenameAll,
   isAIRenaming,
+  onMergePdfs,
 }: BulkSettingsSidebarProps) => {
   const [mode, setMode] = useState<QualityMode>('percentage');
   const [percentage, setPercentage] = useState(100);
@@ -53,6 +58,8 @@ export const BulkSettingsSidebar = ({
     return null;
   }
 
+  const isPdfSelection = selectedType === 'pdf';
+
   return (
     <aside
       role="region"
@@ -67,7 +74,7 @@ export const BulkSettingsSidebar = ({
 
       <div className="space-y-6 py-6">
         {/* KI-Umbenennung */}
-        {onAIRenameAll && (
+        {onAIRenameAll && !isPdfSelection && (
           <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.055] p-4">
             <div className="flex items-center gap-2">
               <RenameSparkIcon className="h-4 w-4 text-primary" />
@@ -90,7 +97,33 @@ export const BulkSettingsSidebar = ({
           </div>
         )}
 
+        {isPdfSelection && (
+          <div className="space-y-4 rounded-lg border border-white/10 bg-white/[0.055] p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <BatchFilesIcon className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-medium">PDF-Werkzeuge</h3>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                  Zusammenführen läuft lokal im Browser. Originale bleiben unverändert; private Inhalte werden nicht hochgeladen.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              className="w-full gap-2"
+              onClick={onMergePdfs}
+              disabled={selectedCount < 2 || !onMergePdfs}
+            >
+              <BatchFilesIcon className="h-4 w-4" />
+              PDFs zusammenführen
+            </Button>
+          </div>
+        )}
+
         {/* Quality settings */}
+        {!isPdfSelection && (
         <div className="space-y-4">
           <h3 className="text-sm font-medium">Qualitätseinstellungen</h3>
 
@@ -141,6 +174,7 @@ export const BulkSettingsSidebar = ({
             </TabsContent>
           </Tabs>
         </div>
+        )}
       </div>
 
       {/* Actions */}
@@ -149,9 +183,11 @@ export const BulkSettingsSidebar = ({
           <Button variant="outline" onClick={onClose} className="flex-1">
             Abbrechen
           </Button>
-          <Button onClick={handleApply} className="flex-1">
-            Anwenden
-          </Button>
+          {!isPdfSelection && (
+            <Button onClick={handleApply} className="flex-1">
+              Anwenden
+            </Button>
+          )}
         </div>
       </div>
     </aside>

@@ -11,6 +11,7 @@ import { useFileConverter } from '@/hooks/useFileConverter';
 import { useAIRename } from '@/hooks/useAIRename';
 import { CleanupMask, ConvertibleFile, CropArea, QualitySettings, TrimRange, FileType, VideoRotation } from '@/types/converter';
 import { runLimitedConcurrency } from '@/lib/conversionQueue';
+import { mergePdfFiles } from '@/lib/pdfOperations';
 
 const LOCAL_CONVERSION_CONCURRENCY = 2;
 
@@ -152,6 +153,8 @@ const Index = () => {
   }, []);
 
   const handleAIRename = useCallback(async (file: ConvertibleFile) => {
+    if (file.type === 'pdf') return;
+
     const baseName = file.originalName.replace(/\.[^/.]+$/, '');
     const newName = await generateName(file.id, baseName, file.type, file.file);
     if (newName) {
@@ -160,11 +163,39 @@ const Index = () => {
   }, [generateName, updateFileName]);
 
   const handleAIRenameSelected = useCallback(async () => {
-    const filesToRename = pendingFiles.filter(f => selectedPendingIds.includes(f.id));
+    const filesToRename = pendingFiles.filter(f => selectedPendingIds.includes(f.id) && f.type !== 'pdf');
     for (const file of filesToRename) {
       await handleAIRename(file);
     }
   }, [pendingFiles, selectedPendingIds, handleAIRename]);
+
+  const handleMergeSelectedPdfs = useCallback(async () => {
+    const filesToMerge = pendingFiles.filter((file) => selectedPendingIds.includes(file.id) && file.type === 'pdf');
+    if (filesToMerge.length < 2) return;
+
+    try {
+      const mergedBlob = await mergePdfFiles(filesToMerge.map((file) => file.file));
+      const mergedBaseName = `merged-${filesToMerge.length}-pdfs`;
+      const mergedFile = new File([mergedBlob], `${mergedBaseName}.pdf`, { type: 'application/pdf' });
+      const [createdFile] = addFiles([mergedFile]);
+      if (createdFile) {
+        updateFile(createdFile.id, {
+          status: 'completed',
+          progress: 100,
+          convertedBlob: mergedBlob,
+          convertedUrl: URL.createObjectURL(mergedBlob),
+          convertedSize: mergedBlob.size,
+          suggestedName: mergedBaseName,
+        });
+      }
+      setSelectedIds([]);
+    } catch (error) {
+      updateFile(filesToMerge[0].id, {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'PDFs konnten nicht lokal zusammengeführt werden.',
+      });
+    }
+  }, [addFiles, pendingFiles, selectedPendingIds, updateFile]);
 
   const handleToggleRemoveBackground = useCallback((fileId: string, enabled: boolean) => {
     updateFile(fileId, { removeBackground: enabled });
@@ -190,10 +221,12 @@ const Index = () => {
           <BulkSettingsSidebar
             open={selectedPendingIds.length > 0}
             selectedCount={selectedPendingIds.length}
+            selectedType={selectedFileType}
             onApply={handleBulkApply}
             onClose={handleClearSelection}
-            onAIRenameAll={handleAIRenameSelected}
+            onAIRenameAll={selectedFileType === 'pdf' ? undefined : handleAIRenameSelected}
             isAIRenaming={isAnyAIRenaming}
+            onMergePdfs={handleMergeSelectedPdfs}
           />
 
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -223,7 +256,7 @@ const Index = () => {
                     onRename={(newName) => updateFileName(file.id, newName)}
                     onSettingsChange={(settings) => updateFileSettings(file.id, settings)}
                     onCropClick={() => setCropDialogFile(file)}
-                    onAIRename={() => handleAIRename(file)}
+                    onAIRename={file.type === 'pdf' ? undefined : () => handleAIRename(file)}
                     isAIRenaming={aiRenameLoading[file.id]}
                     selected={selectedIds.includes(file.id)}
                     onSelectChange={(selected) => handleSelectFile(file.id, selected)}
@@ -242,7 +275,7 @@ const Index = () => {
               {files.length === 0 && (
                 <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.035] p-8 text-center sm:p-12">
                   <p className="text-sm text-muted-foreground">
-                    Noch keine Dateien. Zieh Bilder oder Videos in die Fläche oben.
+                    Noch keine Dateien. Zieh Bilder, Videos oder PDFs in die Fläche oben.
                   </p>
                 </div>
               )}
@@ -263,7 +296,7 @@ const Index = () => {
       <footer className="border-t border-white/10 bg-transparent py-5">
         <div className="container mx-auto flex flex-col items-center justify-between gap-3 px-4 text-xs text-muted-foreground sm:flex-row">
           <img src="/assets/logo-full-white.svg" alt="Maibach Systems" className="h-10 w-auto opacity-80" width="360" height="112" />
-          <span>Lokal im Browser. Kein Upload fuer Konvertierung oder Rename.</span>
+          <span>Lokal im Browser. Kein Upload für Konvertierung, PDF-Werkzeuge oder Rename.</span>
         </div>
       </footer>
 
