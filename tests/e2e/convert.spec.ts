@@ -886,6 +886,38 @@ test("resizes a video through the WebCodecs path without crop or trim fallback",
   await guards.assertClean();
 });
 
+test("applies video cleanup through the degraded frame-render path", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Video cleanup smoke is covered once in Chromium desktop");
+  const sampleWebm = await createSampleWebm(page);
+
+  await installConvertedVideoBlobCapture(page);
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "video-cleanup-smoke.webm",
+    mimeType: "video/webm",
+    buffer: sampleWebm,
+  });
+
+  await expect(page.getByText("video-cleanup-smoke.webm", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Qualitätseinstellungen" }).click();
+  await expect(page.getByText(/Nur für eigene Videos/)).toBeVisible();
+  await page.getByLabel("Watermark bereinigen").click();
+  await page.getByRole("button", { name: "Bereich wählen" }).click();
+  await expect(page.getByRole("dialog")).toContainText("Bereich bereinigen");
+  await expect(page.getByRole("radio", { name: "Freihandmaske" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Bereich verwenden" }).click();
+  await expect(page.getByText(/Bereinigungsbereich/)).toBeVisible();
+
+  await page.getByRole("button", { name: /^Start$/ }).click();
+  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+
+  const metadata = await readLastConvertedVideoMetadata(page);
+  expect(metadata.type).toBe("video/webm");
+  expect(metadata.width).toBe(64);
+  expect(metadata.height).toBe(64);
+  expect(metadata.size).toBeGreaterThan(0);
+});
+
 test("applies video crop and trim through the Mediabunny edit path", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Mediabunny edit smoke is covered once in Chromium desktop");
   const guards = installPageGuards(page);
@@ -1116,6 +1148,8 @@ test("rotates edited video through the Mediabunny path", async ({ page }, testIn
   await expect(page.getByRole("dialog")).toContainText("Video bearbeiten");
   const widthInput = page.getByRole("spinbutton", { name: "Breite", exact: true });
   const heightInput = page.getByRole("spinbutton", { name: "Höhe", exact: true });
+  await expect.poll(async () => Number(await widthInput.inputValue())).toBeGreaterThan(0);
+  await expect.poll(async () => Number(await heightInput.inputValue())).toBeGreaterThan(0);
   const originalWidth = Number(await widthInput.inputValue());
   const originalHeight = Number(await heightInput.inputValue());
   await page.getByRole("button", { name: "Rechts drehen" }).click();

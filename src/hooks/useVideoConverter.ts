@@ -16,9 +16,11 @@ import { extractFrame, getVideoDuration } from "@/lib/videoMetadata";
 interface ConversionOptions {
   qualitySettings: QualitySettings;
   cropArea?: CropArea;
+  cleanupArea?: CropArea;
   dimensions?: { width: number; height: number };
   trimRange?: TrimRange;
   videoRotation?: 0 | 90 | 180 | 270;
+  removeWatermark?: boolean;
 }
 
 type ConversionResult = { blob: Blob; url: string };
@@ -123,6 +125,7 @@ export const useVideoConverter = () => {
       const hasRotation = Boolean(options.videoRotation);
       const hasTrim = Boolean(options.trimRange);
       const hasResize = Boolean(options.dimensions) || options.qualitySettings.scale !== 100;
+      const hasWatermarkCleanup = Boolean(options.removeWatermark);
       const strategy = createVideoConversionStrategy({
         webCodecsSupported: isWebCodecsSupported(),
         mediabunnySupported: isMediabunnyVideoConversionSupported(),
@@ -130,6 +133,7 @@ export const useVideoConverter = () => {
         hasDimensions: hasResize,
         hasRotation,
         hasTrim,
+        hasWatermarkCleanup,
       });
 
       if (strategy.engine === "mediabunny") {

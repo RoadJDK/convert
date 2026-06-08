@@ -234,7 +234,7 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
           { width: videoRef.current.clientWidth, height: videoRef.current.clientHeight },
         );
       }
-    } else if (isCleanupMode && crop && crop.unit === '%' && file?.type === 'image') {
+    } else if (isCleanupMode && crop && crop.unit === '%' && (file?.type === 'image' || file?.type === 'video')) {
       cropArea = {
         x: Number(((crop.x ?? 0) / 100).toFixed(6)),
         y: Number(((crop.y ?? 0) / 100).toFixed(6)),
@@ -339,6 +339,14 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
     setCompletedCrop(undefined);
   }, [originalDimensions, setDimensions]);
 
+  const handleVideoLoad = useCallback(() => {
+    onVideoLoad();
+    if (isCleanupMode) {
+      setCrop(areaToPercentCrop(file?.cleanupArea ?? { x: 0.62, y: 0.58, width: 0.28, height: 0.28 }));
+      setCompletedCrop(undefined);
+    }
+  }, [file?.cleanupArea, isCleanupMode, onVideoLoad]);
+
   // Reset dimensions only
   const handleResetDimensions = useCallback(() => {
     resetDimensions();
@@ -436,7 +444,7 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
                   <video
                     ref={videoRef}
                     src={videoSrc}
-                    onLoadedMetadata={onVideoLoad}
+                    onLoadedMetadata={handleVideoLoad}
                     onTimeUpdate={handleVideoTimeUpdate}
                     className="max-h-[38vh] object-contain"
                     muted
@@ -467,30 +475,32 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
                 <p className="text-sm text-muted-foreground">
                   Markiere nur eigene oder autorisierte Inhalte. Die lokale Inpainting-Stufe rekonstruiert maskierte Pixel aus der Umgebung, ohne vollständige Entfernungsgarantie.
                 </p>
-                <ToggleGroup
-                  type="single"
-                  value={cleanupSelectionMode}
-                  onValueChange={(value) => {
-                    if (value === "rectangle" || value === "freehand") {
-                      setCleanupSelectionMode(value);
-                      setCompletedCrop(undefined);
-                      setCrop(value === "rectangle"
-                        ? areaToPercentCrop(file.cleanupArea ?? { x: 0.62, y: 0.58, width: 0.28, height: 0.28 })
-                        : undefined);
-                    }
-                  }}
-                  className="grid grid-cols-2"
-                  size="sm"
-                  variant="outline"
-                >
-                  <ToggleGroupItem value="rectangle" aria-label="Rechteckmaske">
-                    Rechteck
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="freehand" aria-label="Freihandmaske">
-                    Freihand
-                  </ToggleGroupItem>
-                </ToggleGroup>
-                {cleanupSelectionMode === "freehand" && (
+                {!isVideo && (
+                  <ToggleGroup
+                    type="single"
+                    value={cleanupSelectionMode}
+                    onValueChange={(value) => {
+                      if (value === "rectangle" || value === "freehand") {
+                        setCleanupSelectionMode(value);
+                        setCompletedCrop(undefined);
+                        setCrop(value === "rectangle"
+                          ? areaToPercentCrop(file.cleanupArea ?? { x: 0.62, y: 0.58, width: 0.28, height: 0.28 })
+                          : undefined);
+                      }
+                    }}
+                    className="grid grid-cols-2"
+                    size="sm"
+                    variant="outline"
+                  >
+                    <ToggleGroupItem value="rectangle" aria-label="Rechteckmaske">
+                      Rechteck
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="freehand" aria-label="Freihandmaske">
+                      Freihand
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                )}
+                {cleanupSelectionMode === "freehand" && !isVideo && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Pinsel</span>

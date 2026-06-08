@@ -5,6 +5,7 @@ import {
   createVideoConversionStrategy,
   createVideoEncodingPlan,
   createWebCodecsResizeOperation,
+  resolveRenderedVideoCleanupArea,
   resolveVideoRenderPlan,
 } from "@/lib/videoConversionPlan";
 
@@ -97,11 +98,51 @@ describe("video conversion plan", () => {
         hasDimensions: false,
         hasRotation: true,
         hasTrim: false,
+        hasWatermarkCleanup: false,
       }),
     ).toEqual({
       engine: "mediabunny",
       degraded: false,
       reason: "mediabunny-supported-edit",
+    });
+  });
+
+  it("uses a degraded frame-render path for video cleanup masks", () => {
+    expect(
+      createVideoConversionStrategy({
+        webCodecsSupported: true,
+        mediabunnySupported: true,
+        hasCrop: false,
+        hasDimensions: false,
+        hasRotation: false,
+        hasTrim: false,
+        hasWatermarkCleanup: true,
+      }),
+    ).toEqual({
+      engine: "mediarecorder",
+      degraded: true,
+      reason: "watermark-cleanup-requires-frame-render",
+    });
+  });
+
+  it("maps source cleanup areas into the final rotated video frame", () => {
+    const plan = resolveVideoRenderPlan({
+      videoWidth: 100,
+      videoHeight: 50,
+      duration: 1,
+      cropArea: { x: 0.25, y: 0, width: 0.5, height: 1 },
+      videoRotation: 90,
+    });
+
+    expect(resolveRenderedVideoCleanupArea({
+      cleanupArea: { x: 0.35, y: 0.2, width: 0.2, height: 0.3 },
+      renderPlan: plan,
+      sourceSize: { width: 100, height: 50 },
+    })).toEqual({
+      x: 0.5,
+      y: 0.2,
+      width: 0.3,
+      height: 0.4,
     });
   });
 

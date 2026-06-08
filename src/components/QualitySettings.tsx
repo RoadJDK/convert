@@ -64,6 +64,8 @@ export const QualitySettings = ({
   const watermarkRemovalId = useId();
   const backgroundRemovalDescriptionId = useId();
   const watermarkRemovalDescriptionId = useId();
+  const supportsRemovalControls = fileType === 'image' || fileType === 'video';
+  const supportsBackgroundRemoval = fileType === 'image';
 
   const handleModeChange = (mode: string) => {
     onChange({ ...settings, mode: mode as QualityMode });
@@ -142,12 +144,14 @@ export const QualitySettings = ({
         <div className="space-y-4">
           <h4 className="font-medium text-sm">Qualitätseinstellungen</h4>
 
-          {fileType === 'image' && (onRemoveBackgroundChange || onRemoveWatermarkChange) && (
+          {supportsRemovalControls && ((supportsBackgroundRemoval && onRemoveBackgroundChange) || onRemoveWatermarkChange) && (
             <div className="space-y-2 rounded-lg border border-border bg-secondary/30 p-3">
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Nur für eigene Bilder. Alles läuft lokal; das Original bleibt unverändert.
+                {fileType === 'video'
+                  ? "Nur für eigene Videos. Alles läuft lokal; das Original bleibt unverändert."
+                  : "Nur für eigene Bilder. Alles läuft lokal; das Original bleibt unverändert."}
               </p>
-              {onRemoveBackgroundChange && (
+              {supportsBackgroundRemoval && onRemoveBackgroundChange && (
                 <div className="space-y-1">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
@@ -185,7 +189,9 @@ export const QualitySettings = ({
                     />
                   </div>
                   <p id={watermarkRemovalDescriptionId} className="text-xs leading-relaxed text-muted-foreground">
-                    {watermarkRemovalPlan.uiDescription}
+                    {fileType === 'video'
+                      ? "Lokale Frame-Masken-Bereinigung im degradierten Exportpfad, keine vollständige Entfernungsgarantie."
+                      : watermarkRemovalPlan.uiDescription}
                   </p>
                   {onCleanupAreaClick && (
                     <Button

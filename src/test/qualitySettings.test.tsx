@@ -30,4 +30,27 @@ describe("QualitySettings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Bereich wählen" }));
     expect(onCleanupAreaClick).toHaveBeenCalledTimes(1);
   });
+
+  it("offers video cleanup without image background removal controls", async () => {
+    const onCleanupAreaClick = vi.fn();
+
+    render(
+      <QualitySettings
+        settings={DEFAULT_QUALITY_SETTINGS}
+        onChange={vi.fn()}
+        fileType="video"
+        removeWatermark={false}
+        onRemoveWatermarkChange={vi.fn()}
+        onCleanupAreaClick={onCleanupAreaClick}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Qualitätseinstellungen" }));
+
+    expect(await screen.findByLabelText("Watermark bereinigen")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Hintergrund lokal entfernen")).not.toBeInTheDocument();
+    expect(screen.getByText(/Nur für eigene Videos/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Bereich wählen" }));
+    expect(onCleanupAreaClick).toHaveBeenCalledTimes(1);
+  });
 });

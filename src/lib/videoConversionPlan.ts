@@ -23,6 +23,12 @@ type ResolveVideoRenderPlanOptions = {
   videoRotation?: VideoRotation;
 };
 
+type ResolveRenderedVideoCleanupAreaOptions = {
+  cleanupArea?: CropArea;
+  renderPlan: VideoRenderPlan;
+  sourceSize: { width: number; height: number };
+};
+
 export type VideoRenderPlan = {
   rotation: VideoRotation;
   source: { x: number; y: number; width: number; height: number };
@@ -37,6 +43,7 @@ type CreateVideoConversionStrategyOptions = {
   hasDimensions: boolean;
   hasRotation: boolean;
   hasTrim: boolean;
+  hasWatermarkCleanup?: boolean;
 };
 
 export type VideoConversionStrategy = {
@@ -47,6 +54,7 @@ export type VideoConversionStrategy = {
     | "webcodecs-supported-remux"
     | "mediabunny-supported-edit"
     | "crop-trim-requires-frame-edit-muxer"
+    | "watermark-cleanup-requires-frame-render"
     | "webcodecs-unavailable";
 };
 
@@ -102,7 +110,16 @@ export function createVideoConversionStrategy({
   hasDimensions,
   hasRotation,
   hasTrim,
+  hasWatermarkCleanup = false,
 }: CreateVideoConversionStrategyOptions): VideoConversionStrategy {
+  if (hasWatermarkCleanup) {
+    return {
+      engine: "mediarecorder",
+      degraded: true,
+      reason: "watermark-cleanup-requires-frame-render",
+    };
+  }
+
   if (hasCrop || hasRotation || hasTrim) {
     if (mediabunnySupported) {
       return {
@@ -198,6 +215,62 @@ export function resolveVideoRenderPlan(options: ResolveVideoRenderPlanOptions): 
   };
 }
 
+export function resolveRenderedVideoCleanupArea(
+  options: ResolveRenderedVideoCleanupAreaOptions,
+): CropArea | undefined {
+  if (!options.cleanupArea) return undefined;
+
+  const sourceWidth = Math.max(1, Math.round(options.sourceSize.width));
+  const sourceHeight = Math.max(1, Math.round(options.sourceSize.height));
+  const cleanup = resolveCropAreaToSourcePixels(options.cleanupArea, {
+    width: sourceWidth,
+    height: sourceHeight,
+  });
+  const source = options.renderPlan.source;
+  const left = clamp(cleanup.x, source.x, source.x + source.width);
+  const top = clamp(cleanup.y, source.y, source.y + source.height);
+  const right = clamp(cleanup.x + cleanup.width, left, source.x + source.width);
+  const bottom = clamp(cleanup.y + cleanup.height, top, source.y + source.height);
+
+  if (right <= left || bottom <= top) return undefined;
+
+  const normalized: CropArea = {
+    x: normalizeFraction((left - source.x) / source.width),
+    y: normalizeFraction((top - source.y) / source.height),
+    width: normalizeFraction((right - left) / source.width),
+    height: normalizeFraction((bottom - top) / source.height),
+  };
+
+  if (options.renderPlan.rotation === 90) {
+    return {
+      x: normalizeFraction(1 - (normalized.y + normalized.height)),
+      y: normalized.x,
+      width: normalized.height,
+      height: normalized.width,
+    };
+  }
+
+  if (options.renderPlan.rotation === 180) {
+    return {
+      x: normalizeFraction(1 - (normalized.x + normalized.width)),
+      y: normalizeFraction(1 - (normalized.y + normalized.height)),
+      width: normalized.width,
+      height: normalized.height,
+    };
+  }
+
+  if (options.renderPlan.rotation === 270) {
+    return {
+      x: normalized.y,
+      y: normalizeFraction(1 - (normalized.x + normalized.width)),
+      width: normalized.height,
+      height: normalized.width,
+    };
+  }
+
+  return normalized;
+}
+
 function toEvenDimension(value: number): number {
   const rounded = Math.max(2, Math.round(value));
   return rounded % 2 === 0 ? rounded : rounded + 1;
@@ -205,4 +278,8 @@ function toEvenDimension(value: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
+}
+
+function normalizeFraction(value: number): number {
+  return Number(clamp(value, 0, 1).toFixed(6));
 }

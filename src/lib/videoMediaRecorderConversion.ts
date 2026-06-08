@@ -1,17 +1,21 @@
 import { convertMedia } from "@remotion/webcodecs";
 import type { CropArea, QualitySettings, TrimRange, VideoOutputFormat, VideoRotation } from "@/types/converter";
+import { applyWatermarkCleanup } from "@/lib/watermarkCleanup";
 import {
   chooseMediaRecorderMimeType,
   createVideoEncodingPlan,
+  resolveRenderedVideoCleanupArea,
   resolveVideoRenderPlan,
 } from "@/lib/videoConversionPlan";
 
 type ConversionOptions = {
   qualitySettings: QualitySettings;
   cropArea?: CropArea;
+  cleanupArea?: CropArea;
   dimensions?: { width: number; height: number };
   trimRange?: TrimRange;
   videoRotation?: VideoRotation;
+  removeWatermark?: boolean;
 };
 
 type ConversionResult = { blob: Blob; url: string };
@@ -73,6 +77,13 @@ export async function convertWithMediaRecorder(
         return;
       }
 
+      const renderedCleanupArea = resolveRenderedVideoCleanupArea({
+        cleanupArea: options.cleanupArea,
+        renderPlan,
+        sourceSize: { width: video.videoWidth, height: video.videoHeight },
+      });
+      const cleanupFrame = Boolean(options.removeWatermark);
+
       const mimeType = chooseMediaRecorderMimeType(outputFormat);
       if (!mimeType) {
         cleanup();
@@ -111,11 +122,21 @@ export async function convertWithMediaRecorder(
       };
 
       const startRecording = async () => {
-        await drawInitialFrame(video, ctx, canvas.width, canvas.height, renderPlan);
+        await drawInitialFrame({
+          canvas,
+          cleanupArea: renderedCleanupArea,
+          cleanupFrame,
+          ctx,
+          renderPlan,
+          video,
+        });
         recorder.start(250);
         onProgress(20);
         await video.play();
         tickRecorder({
+          canvas,
+          cleanupArea: renderedCleanupArea,
+          cleanupFrame,
           ctx,
           recorder,
           renderPlan,
@@ -184,17 +205,26 @@ async function waitForFrame(video: HTMLVideoElement): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 50));
 }
 
-async function drawInitialFrame(
-  video: HTMLVideoElement,
-  ctx: CanvasRenderingContext2D,
-  targetWidth: number,
-  targetHeight: number,
-  renderPlan: ReturnType<typeof resolveVideoRenderPlan>,
-) {
+async function drawInitialFrame({
+  canvas,
+  cleanupArea,
+  cleanupFrame,
+  ctx,
+  renderPlan,
+  video,
+}: {
+  canvas: HTMLCanvasElement;
+  cleanupArea?: CropArea;
+  cleanupFrame: boolean;
+  ctx: CanvasRenderingContext2D;
+  renderPlan: ReturnType<typeof resolveVideoRenderPlan>;
+  video: HTMLVideoElement;
+}) {
   try {
     await waitForFrame(video);
     if (video.readyState >= 2) {
-      drawVideoFrame(video, ctx, targetWidth, targetHeight, renderPlan);
+      drawVideoFrame(video, ctx, canvas.width, canvas.height, renderPlan);
+      cleanupVideoFrame(canvas, cleanupFrame, cleanupArea);
     }
   } catch {
     // ignore best-effort first frame failures
@@ -202,6 +232,9 @@ async function drawInitialFrame(
 }
 
 function tickRecorder({
+  canvas,
+  cleanupArea,
+  cleanupFrame,
   ctx,
   recorder,
   renderPlan,
@@ -210,6 +243,9 @@ function tickRecorder({
   video,
   onProgress,
 }: {
+  canvas: HTMLCanvasElement;
+  cleanupArea?: CropArea;
+  cleanupFrame: boolean;
   ctx: CanvasRenderingContext2D;
   recorder: MediaRecorder;
   renderPlan: ReturnType<typeof resolveVideoRenderPlan>;
@@ -258,6 +294,7 @@ function tickRecorder({
 
     if (video.readyState >= 2) {
       drawVideoFrame(video, ctx, targetWidth, targetHeight, renderPlan);
+      cleanupVideoFrame(canvas, cleanupFrame, cleanupArea);
     }
 
     const rel = Math.max(0, Math.min(1, (video.currentTime - renderPlan.trim.start) / renderPlan.trim.duration));
@@ -272,6 +309,11 @@ function tickRecorder({
   };
 
   tick();
+}
+
+function cleanupVideoFrame(canvas: HTMLCanvasElement, enabled: boolean, cleanupArea?: CropArea) {
+  if (!enabled) return;
+  applyWatermarkCleanup(canvas, cleanupArea);
 }
 
 function drawVideoFrame(
