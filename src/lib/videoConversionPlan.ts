@@ -30,17 +30,19 @@ export type VideoRenderPlan = {
 
 type CreateVideoConversionStrategyOptions = {
   webCodecsSupported: boolean;
+  mediabunnySupported: boolean;
   hasCrop: boolean;
   hasDimensions: boolean;
   hasTrim: boolean;
 };
 
 export type VideoConversionStrategy = {
-  engine: "webcodecs" | "mediarecorder";
+  engine: "webcodecs" | "mediabunny" | "mediarecorder";
   degraded: boolean;
   reason:
     | "webcodecs-supported-edit"
     | "webcodecs-supported-remux"
+    | "mediabunny-supported-edit"
     | "crop-trim-requires-frame-edit-muxer"
     | "webcodecs-unavailable";
 };
@@ -92,23 +94,32 @@ export function chooseMediaRecorderMimeType(
 
 export function createVideoConversionStrategy({
   webCodecsSupported,
+  mediabunnySupported,
   hasCrop,
   hasDimensions,
   hasTrim,
 }: CreateVideoConversionStrategyOptions): VideoConversionStrategy {
+  if (hasCrop || hasTrim) {
+    if (mediabunnySupported) {
+      return {
+        engine: "mediabunny",
+        degraded: false,
+        reason: "mediabunny-supported-edit",
+      };
+    }
+
+    return {
+      engine: "mediarecorder",
+      degraded: true,
+      reason: "crop-trim-requires-frame-edit-muxer",
+    };
+  }
+
   if (!webCodecsSupported) {
     return {
       engine: "mediarecorder",
       degraded: true,
       reason: "webcodecs-unavailable",
-    };
-  }
-
-  if (hasCrop || hasTrim) {
-    return {
-      engine: "mediarecorder",
-      degraded: true,
-      reason: "crop-trim-requires-frame-edit-muxer",
     };
   }
 

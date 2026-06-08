@@ -195,6 +195,52 @@ const createSampleWebm = async (page: Page): Promise<Buffer> => {
   return Buffer.from(bytes);
 };
 
+const installConvertedVideoBlobCapture = async (page: Page) => {
+  await page.evaluate(() => {
+    const win = window as Window & {
+      __convertedVideoBlobs?: Blob[];
+      __originalCreateObjectURL?: typeof URL.createObjectURL;
+    };
+
+    if (!win.__originalCreateObjectURL) {
+      win.__originalCreateObjectURL = URL.createObjectURL.bind(URL);
+    }
+
+    win.__convertedVideoBlobs = [];
+    URL.createObjectURL = (object: Blob | MediaSource) => {
+      if (object instanceof Blob && object.type.startsWith("video/")) {
+        win.__convertedVideoBlobs?.push(object);
+      }
+      return win.__originalCreateObjectURL?.(object) ?? "";
+    };
+  });
+};
+
+const readLastConvertedVideoMetadata = async (page: Page) =>
+  page.evaluate(async () => {
+    const blobs = (window as Window & { __convertedVideoBlobs?: Blob[] }).__convertedVideoBlobs ?? [];
+    const blob = blobs.at(-1);
+    if (!blob) throw new Error("Missing converted video blob");
+
+    const url = URL.createObjectURL(blob);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.src = url;
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error("Converted video metadata could not be loaded"));
+    });
+    const result = {
+      duration: video.duration,
+      height: video.videoHeight,
+      size: blob.size,
+      type: blob.type,
+      width: video.videoWidth,
+    };
+    URL.revokeObjectURL(url);
+    return result;
+  });
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
@@ -509,24 +555,7 @@ test("resizes a video through the WebCodecs path without crop or trim fallback",
   const guards = installPageGuards(page);
   const sampleWebm = await createSampleWebm(page);
 
-  await page.evaluate(() => {
-    const win = window as Window & {
-      __convertedVideoBlobs?: Blob[];
-      __originalCreateObjectURL?: typeof URL.createObjectURL;
-    };
-
-    if (!win.__originalCreateObjectURL) {
-      win.__originalCreateObjectURL = URL.createObjectURL.bind(URL);
-    }
-
-    win.__convertedVideoBlobs = [];
-    URL.createObjectURL = (object: Blob | MediaSource) => {
-      if (object instanceof Blob && object.type.startsWith("video/")) {
-        win.__convertedVideoBlobs?.push(object);
-      }
-      return win.__originalCreateObjectURL?.(object) ?? "";
-    };
-  });
+  await installConvertedVideoBlobCapture(page);
 
   await page.locator('input[type="file"]').setInputFiles({
     name: "resize-smoke.webm",
@@ -542,32 +571,72 @@ test("resizes a video through the WebCodecs path without crop or trim fallback",
   await page.getByRole("button", { name: /^Start$/ }).click();
   await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
 
-  const metadata = await page.evaluate(async () => {
-    const blobs = (window as Window & { __convertedVideoBlobs?: Blob[] }).__convertedVideoBlobs ?? [];
-    const blob = blobs.at(-1);
-    if (!blob) throw new Error("Missing converted video blob");
-
-    const url = URL.createObjectURL(blob);
-    const video = document.createElement("video");
-    video.preload = "metadata";
-    video.src = url;
-    await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve();
-      video.onerror = () => reject(new Error("Converted video metadata could not be loaded"));
-    });
-    const result = {
-      height: video.videoHeight,
-      size: blob.size,
-      type: blob.type,
-      width: video.videoWidth,
-    };
-    URL.revokeObjectURL(url);
-    return result;
-  });
+  const metadata = await readLastConvertedVideoMetadata(page);
 
   expect(metadata.type).toBe("video/webm");
   expect(metadata.width).toBe(32);
   expect(metadata.height).toBe(32);
+  expect(metadata.size).toBeGreaterThan(0);
+
+  await guards.assertClean();
+});
+
+test("applies video crop and trim through the Mediabunny edit path", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Mediabunny edit smoke is covered once in Chromium desktop");
+  const guards = installPageGuards(page);
+  const sampleWebm = await createSampleWebm(page);
+
+  await installConvertedVideoBlobCapture(page);
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "edit-smoke.webm",
+    mimeType: "video/webm",
+    buffer: sampleWebm,
+  });
+
+  await expect(page.getByText("edit-smoke.webm", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Zuschneiden" }).first().click();
+  await expect(page.getByRole("dialog")).toContainText("Video bearbeiten");
+
+  const previewVideo = page.locator("video").first();
+  await expect(previewVideo).toBeVisible();
+  const originalDuration = await previewVideo.evaluate((video: HTMLVideoElement) => video.duration);
+
+  const videoBox = await previewVideo.boundingBox();
+  expect(videoBox).not.toBeNull();
+  await page.mouse.move((videoBox?.x ?? 0) + 8, (videoBox?.y ?? 0) + 8);
+  await page.mouse.down();
+  await page.mouse.move((videoBox?.x ?? 0) + 38, (videoBox?.y ?? 0) + 38, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+
+  const cropSelection = page.locator(".ReactCrop__crop-selection");
+  const selectionBox = await cropSelection.boundingBox();
+  expect(selectionBox).not.toBeNull();
+  expect(selectionBox?.width).toBeGreaterThan(16);
+  expect(selectionBox?.width).toBeLessThan((videoBox?.width ?? 64) - 1);
+
+  const endSlider = page.getByRole("slider", { name: "Ende" });
+  await endSlider.focus();
+  for (let pressCount = 0; pressCount < 4; pressCount += 1) {
+    await page.keyboard.press("ArrowLeft");
+  }
+  await expect
+    .poll(async () => Number(await endSlider.getAttribute("aria-valuenow")))
+    .toBeLessThan(originalDuration - 0.1);
+
+  await page.getByRole("button", { name: "Anwenden" }).click();
+  await page.getByRole("button", { name: /^Start$/ }).click();
+  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+
+  const metadata = await readLastConvertedVideoMetadata(page);
+  expect(metadata.type).toBe("video/webm");
+  expect(metadata.width).toBeGreaterThan(10);
+  expect(metadata.height).toBeGreaterThan(10);
+  expect(metadata.width).toBeLessThan(64);
+  expect(metadata.height).toBeLessThan(64);
+  expect(metadata.duration).toBeGreaterThan(0.1);
+  expect(metadata.duration).toBeLessThan(originalDuration - 0.1);
   expect(metadata.size).toBeGreaterThan(0);
 
   await guards.assertClean();

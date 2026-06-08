@@ -6,6 +6,10 @@ import {
   createVideoEncodingPlan,
   createWebCodecsResizeOperation,
 } from "@/lib/videoConversionPlan";
+import {
+  convertWithMediabunny,
+  isMediabunnyVideoConversionSupported,
+} from "@/lib/mediabunnyVideoConversion";
 import { convertWithMediaRecorder } from "@/lib/videoMediaRecorderConversion";
 import { extractFrame, getVideoDuration } from "@/lib/videoMetadata";
 
@@ -119,10 +123,21 @@ export const useVideoConverter = () => {
       const hasResize = Boolean(options.dimensions) || options.qualitySettings.scale !== 100;
       const strategy = createVideoConversionStrategy({
         webCodecsSupported: isWebCodecsSupported(),
+        mediabunnySupported: isMediabunnyVideoConversionSupported(),
         hasCrop,
         hasDimensions: hasResize,
         hasTrim,
       });
+
+      if (strategy.engine === "mediabunny") {
+        try {
+          return await convertWithMediabunny(file, onProgress, options);
+        } catch (mediabunnyError) {
+          console.warn("[VideoConverter] Mediabunny failed, trying degraded fallback:", mediabunnyError);
+        }
+
+        return convertWithMediaRecorder(file, onProgress, options);
+      }
 
       if (strategy.engine === "mediarecorder") {
         if (strategy.degraded) {

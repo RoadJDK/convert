@@ -58,6 +58,7 @@ describe("video conversion plan", () => {
     expect(
       createVideoConversionStrategy({
         webCodecsSupported: true,
+        mediabunnySupported: true,
         hasCrop: false,
         hasDimensions: true,
         hasTrim: false,
@@ -69,18 +70,19 @@ describe("video conversion plan", () => {
     });
   });
 
-  it("marks crop and trim as degraded MediaRecorder fallback until the demux/mux edit path exists", () => {
+  it("uses Mediabunny for crop and trim edits when supported", () => {
     expect(
       createVideoConversionStrategy({
         webCodecsSupported: true,
+        mediabunnySupported: true,
         hasCrop: true,
         hasDimensions: false,
         hasTrim: true,
       }),
     ).toEqual({
-      engine: "mediarecorder",
-      degraded: true,
-      reason: "crop-trim-requires-frame-edit-muxer",
+      engine: "mediabunny",
+      degraded: false,
+      reason: "mediabunny-supported-edit",
     });
   });
 
@@ -88,6 +90,7 @@ describe("video conversion plan", () => {
     expect(
       createVideoConversionStrategy({
         webCodecsSupported: false,
+        mediabunnySupported: false,
         hasCrop: false,
         hasDimensions: true,
         hasTrim: false,
