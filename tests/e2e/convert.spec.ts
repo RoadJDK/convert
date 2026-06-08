@@ -519,6 +519,27 @@ test("loads the local converter without layout or runtime failures", async ({ pa
   await guards.assertClean();
 });
 
+test("advertises installable offline PWA trust signals", async ({ page }) => {
+  const guards = installPageGuards(page);
+
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
+  await expect(page.getByText("PWA installierbar")).toBeVisible();
+  await expect(page.getByText("Offline nach erstem Laden")).toBeVisible();
+  await expect(page.getByText("Keine Upload-Requests für Dateien")).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      return page.evaluate(async () => {
+        if (!("serviceWorker" in navigator)) return false;
+        const registration = await navigator.serviceWorker.getRegistration("/");
+        return Boolean(registration);
+      });
+    }, { timeout: 10000 })
+    .toBe(true);
+
+  await guards.assertClean();
+});
+
 test("keeps the drop zone stable on pointer hover", async ({ page }) => {
   const guards = installPageGuards(page);
   const dropZone = page.getByTestId("drop-zone");

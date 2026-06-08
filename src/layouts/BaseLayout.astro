@@ -8,7 +8,7 @@ interface Props {
 
 const {
   title = "Maibach Convert",
-  description = "Lokaler Bild- und Video-Converter fuer Webformate.",
+  description = "Lokaler Bild-, Video- und PDF-Converter ohne Datei-Uploads.",
 } = Astro.props;
 ---
 
@@ -18,13 +18,24 @@ const {
     <meta charset="UTF-8" />
     <meta name="description" content={description} />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#13151a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>{title}</title>
   </head>
   <body>
     <slot />
     <div class="grain" aria-hidden="true"></div>
+    <script is:inline>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>
