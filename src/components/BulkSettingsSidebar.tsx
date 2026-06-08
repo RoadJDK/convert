@@ -22,7 +22,9 @@ interface BulkSettingsSidebarProps {
   onAIRenameAll?: () => void;
   isAIRenaming?: boolean;
   onCompressPdfs?: () => void;
+  onCreatePdfFromImages?: () => void;
   onMergePdfs?: () => void;
+  onRenderPdfPagesToImages?: () => void;
   onReorderPdf?: (pageOrder: string) => void;
   onRotatePdfs?: (degrees: 90 | 180 | 270) => void;
   onSplitPdfs?: () => void;
@@ -37,7 +39,9 @@ export const BulkSettingsSidebar = ({
   onAIRenameAll,
   isAIRenaming,
   onCompressPdfs,
+  onCreatePdfFromImages,
   onMergePdfs,
+  onRenderPdfPagesToImages,
   onReorderPdf,
   onRotatePdfs,
   onSplitPdfs,
@@ -158,6 +162,15 @@ export const BulkSettingsSidebar = ({
               >
                 PDFs komprimieren
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2 sm:col-span-2"
+                onClick={onRenderPdfPagesToImages}
+                disabled={!onRenderPdfPagesToImages}
+              >
+                PDF-Seiten als PNG
+              </Button>
             </div>
             <div className="space-y-2">
               <Label htmlFor="pdf-page-order">Seitenfolge</Label>
@@ -184,6 +197,26 @@ export const BulkSettingsSidebar = ({
                 </p>
               )}
             </div>
+          </div>
+        )}
+
+        {selectedType === 'image' && onCreatePdfFromImages && (
+          <div className="space-y-3 rounded-lg border border-white/10 bg-white/[0.055] p-4">
+            <div>
+              <h3 className="text-sm font-medium">PDF erstellen</h3>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                Bilder werden lokal im Browser als PDF gebündelt. Originale bleiben unverändert.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full gap-2"
+              onClick={onCreatePdfFromImages}
+            >
+              <BatchFilesIcon className="h-4 w-4" />
+              Bilder als PDF bündeln
+            </Button>
           </div>
         )}
 

@@ -7,6 +7,11 @@ const SAMPLE_PNG = Buffer.from(
   "base64",
 );
 
+const PDF_EMBED_SAMPLE_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+  "base64",
+);
+
 const CROP_SAMPLE_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAZAAAADwCAIAAAChXqV1AAACZUlEQVR42u3UQQ0AAAjEsHOJJ/zhBxuQNKmCPZbpAnghEgCGBWBYgGEBGBaAYQGGBWBYAIYFGBaAYQEYFmBYAIYFYFiAYQEYFoBhAYYFYFgAhgUYFoBhARgWYFgAhgVgWIBhARgWYFgqAIYFYFiAYQEYFoBhAYYFYFgAhgUYFoBhARgWYFgAhgVgWIBhARgWgGEBhgVgWACGBRgWgGEBGBZgWACGBWBYgGEBGBZgWCoAhgVgWIBhARgWgGEBhgVgWACGBRgWgGEBGBZgWACGBWBYgGEBGBaAYQGGBWBYAIYFGBaAYQEYFmBYAIYFYFiAYQEYFmBYAIYFYFiAYQEYFoBhAYYFYFgAhgUYFoBhARgWYFgAhgVgWIBhARgWgGEBhgVgWACGBRgWgGEBGBZgWACGBWBYgGEBGBZgWACGBWBYgGEBGBaAYQGGBWBYAIYFGBaAYQEYFmBYAIYFYFiAYQEYFoBhAYYFYFgAhgUYFoBhARgWYFgAhgVgWIBhARgWYFgAhgVgWIBhARgWgGEBhgVgWACGBRgWgGEBGBZgWACGBWBYgGEBGBaAYQGGBWBYAIYFGBaAYQEYFmBYAIYFYFiAYQEYFmBYAIYFYFiAYQEYFoBhAYYFYFgAhgUYFoBhARgWYFgAhgVgWIBhARgWgGEBhgVgWACGBRgWgGEBGBZgWACGBWBYgGEBGBZgWACGBWBYgGEBGBaAYQGGBWBYAIYFGBaAYQEYFmBYAIYFYFiAYQEYFoBhAYYFYFgAhgUYFoBhARgWYFgAhgVgWIBhARgWYFgAhgVgWIBhARgWgGEBhgVwywIz0b+QMT378QAAAABJRU5ErkJggg==",
   "base64",
@@ -389,6 +394,7 @@ const installConvertedVideoBlobCapture = async (page: Page) => {
 const installConvertedPdfBlobCapture = async (page: Page) => {
   await page.evaluate(() => {
     const win = window as Window & {
+      __convertedImageBlobs?: Blob[];
       __convertedPdfBlobs?: Blob[];
       __originalCreateObjectURL?: typeof URL.createObjectURL;
     };
@@ -397,8 +403,12 @@ const installConvertedPdfBlobCapture = async (page: Page) => {
       win.__originalCreateObjectURL = URL.createObjectURL.bind(URL);
     }
 
+    win.__convertedImageBlobs = [];
     win.__convertedPdfBlobs = [];
     URL.createObjectURL = (object: Blob | MediaSource) => {
+      if (object instanceof Blob && object.type.startsWith("image/")) {
+        win.__convertedImageBlobs?.push(object);
+      }
       if (object instanceof Blob && object.type === "application/pdf") {
         win.__convertedPdfBlobs?.push(object);
       }
@@ -406,6 +416,23 @@ const installConvertedPdfBlobCapture = async (page: Page) => {
     };
   });
 };
+
+const readLastConvertedImageMetadata = async (page: Page) =>
+  page.evaluate(async () => {
+    const blobs = (window as Window & { __convertedImageBlobs?: Blob[] }).__convertedImageBlobs ?? [];
+    const blob = blobs.at(-1);
+    if (!blob) throw new Error("Missing converted image blob");
+
+    const bitmap = await createImageBitmap(blob);
+    const result = {
+      height: bitmap.height,
+      size: blob.size,
+      type: blob.type,
+      width: bitmap.width,
+    };
+    bitmap.close();
+    return result;
+  });
 
 const readLastConvertedPdfBytes = async (page: Page): Promise<Buffer> => {
   const bytes = await page.evaluate(async () => {
@@ -656,6 +683,43 @@ test("merges selected PDFs locally without upload", async ({ page }) => {
   await guards.assertClean();
 });
 
+test("bundles selected images into a local PDF without upload", async ({ page }) => {
+  const guards = installPageGuards(page);
+  const writeRequests: string[] = [];
+  page.on("request", (request) => {
+    if (["POST", "PUT", "PATCH"].includes(request.method())) {
+      writeRequests.push(`${request.method()} ${request.url()}`);
+    }
+  });
+  await installConvertedPdfBlobCapture(page);
+
+  await page.locator('input[type="file"]').setInputFiles([
+    {
+      name: "image-a.png",
+      mimeType: "image/png",
+      buffer: PDF_EMBED_SAMPLE_PNG,
+    },
+    {
+      name: "image-b.png",
+      mimeType: "image/png",
+      buffer: PDF_EMBED_SAMPLE_PNG,
+    },
+  ]);
+
+  await expect(page.getByAltText("image-a.png")).toBeVisible();
+  await expect(page.getByAltText("image-b.png")).toBeVisible();
+  await page.getByRole("button", { name: "Bilder (2)" }).click();
+  await page.getByRole("button", { name: "Bilder als PDF bündeln" }).click();
+  await expect(page.locator('[title="images-2-pages.pdf"]')).toBeVisible();
+
+  const output = await PDFDocument.load(await readLastConvertedPdfBytes(page));
+  expect(output.getPageCount()).toBe(2);
+  expect(output.getAuthor()).toBe("Maibach Convert");
+  expect(writeRequests).toEqual([]);
+
+  await guards.assertClean();
+});
+
 test("runs single PDF page tools locally without upload", async ({ page }) => {
   const guards = installPageGuards(page);
   const writeRequests: string[] = [];
@@ -707,6 +771,17 @@ test("runs single PDF page tools locally without upload", async ({ page }) => {
   output = await PDFDocument.load(await readLastConvertedPdfBytes(page));
   expect(output.getPageCount()).toBe(3);
   expect(output.getAuthor()).toBe("Maibach Convert");
+
+  await page.getByRole("checkbox").first().click();
+  await page.getByRole("button", { name: "PDF-Seiten als PNG" }).click();
+  await expect(page.locator('[title="tools-page-1.png"]')).toBeVisible();
+  await expect(page.locator('[title="tools-page-2.png"]')).toBeVisible();
+  await expect(page.locator('[title="tools-page-3.png"]')).toBeVisible();
+  const png = await readLastConvertedImageMetadata(page);
+  expect(png.type).toBe("image/png");
+  expect(png.width).toBeGreaterThan(0);
+  expect(png.height).toBeGreaterThan(0);
+
   expect(writeRequests).toEqual([]);
 
   await guards.assertClean();

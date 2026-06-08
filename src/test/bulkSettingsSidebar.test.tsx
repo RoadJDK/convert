@@ -23,6 +23,7 @@ describe("BulkSettingsSidebar", () => {
     const onSplitPdfs = vi.fn();
     const onRotatePdfs = vi.fn();
     const onCompressPdfs = vi.fn();
+    const onRenderPdfPagesToImages = vi.fn();
     const onApply = vi.fn();
 
     render(
@@ -34,6 +35,7 @@ describe("BulkSettingsSidebar", () => {
         onClose={vi.fn()}
         onCompressPdfs={onCompressPdfs}
         onMergePdfs={onMergePdfs}
+        onRenderPdfPagesToImages={onRenderPdfPagesToImages}
         onRotatePdfs={onRotatePdfs}
         onSplitPdfs={onSplitPdfs}
       />,
@@ -43,11 +45,13 @@ describe("BulkSettingsSidebar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Seiten aufteilen" }));
     fireEvent.click(screen.getByRole("button", { name: "90° drehen" }));
     fireEvent.click(screen.getByRole("button", { name: "PDFs komprimieren" }));
+    fireEvent.click(screen.getByRole("button", { name: "PDF-Seiten als PNG" }));
 
     expect(onMergePdfs).toHaveBeenCalledTimes(1);
     expect(onSplitPdfs).toHaveBeenCalledTimes(1);
     expect(onRotatePdfs).toHaveBeenCalledWith(90);
     expect(onCompressPdfs).toHaveBeenCalledTimes(1);
+    expect(onRenderPdfPagesToImages).toHaveBeenCalledTimes(1);
     expect(onApply).not.toHaveBeenCalled();
     expect(screen.getByText(/lokal im Browser/i)).toBeInTheDocument();
     expect(screen.queryByText("Qualitätseinstellungen")).not.toBeInTheDocument();
@@ -71,5 +75,28 @@ describe("BulkSettingsSidebar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Seiten neu sortieren" }));
 
     expect(onReorderPdf).toHaveBeenCalledWith("2,1");
+  });
+
+  it("offers a local image-to-PDF action for selected images", () => {
+    const onCreatePdfFromImages = vi.fn();
+    const onApply = vi.fn();
+
+    render(
+      <BulkSettingsSidebar
+        open
+        selectedCount={2}
+        selectedType="image"
+        onApply={onApply}
+        onClose={vi.fn()}
+        onCreatePdfFromImages={onCreatePdfFromImages}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Bilder als PDF bündeln" }));
+
+    expect(onCreatePdfFromImages).toHaveBeenCalledTimes(1);
+    expect(onApply).not.toHaveBeenCalled();
+    expect(screen.getByText(/lokal im Browser/i)).toBeInTheDocument();
+    expect(screen.getByText("Qualitätseinstellungen")).toBeInTheDocument();
   });
 });

@@ -11,6 +11,8 @@ import { useFileConverter } from '@/hooks/useFileConverter';
 import { useAIRename } from '@/hooks/useAIRename';
 import { CleanupMask, ConvertibleFile, CropArea, QualitySettings, TrimRange, FileType, VideoRotation } from '@/types/converter';
 import { runLimitedConcurrency } from '@/lib/conversionQueue';
+import { imageFilesToPdf } from '@/lib/imageToPdf';
+import { renderPdfPagesToPng } from '@/lib/pdfPageRendering';
 import {
   compressPdfFile,
   mergePdfFiles,
@@ -78,6 +80,11 @@ const Index = () => {
 
   const selectedPdfFiles = useMemo(
     () => pendingFiles.filter((file) => selectedPendingIds.includes(file.id) && file.type === 'pdf'),
+    [pendingFiles, selectedPendingIds],
+  );
+
+  const selectedImageFiles = useMemo(
+    () => pendingFiles.filter((file) => selectedPendingIds.includes(file.id) && file.type === 'image'),
     [pendingFiles, selectedPendingIds],
   );
 
@@ -214,6 +221,22 @@ const Index = () => {
     });
   }, [addFiles, updateFile]);
 
+  const addCompletedPngResult = useCallback((blob: Blob, suggestedName: string) => {
+    const imageFile = new File([blob], `${suggestedName}.png`, { type: 'image/png' });
+    const [createdFile] = addFiles([imageFile]);
+    if (!createdFile) return;
+
+    updateFile(createdFile.id, {
+      status: 'completed',
+      progress: 100,
+      convertedBlob: blob,
+      convertedUrl: URL.createObjectURL(blob),
+      convertedSize: blob.size,
+      qualitySettings: { ...createdFile.qualitySettings, outputFormat: 'png' },
+      suggestedName,
+    });
+  }, [addFiles, updateFile]);
+
   const handleMergeSelectedPdfs = useCallback(async () => {
     if (selectedPdfFiles.length < 2) return;
 
@@ -272,6 +295,18 @@ const Index = () => {
     setSelectedIds([]);
   }, [addCompletedPdfResult, handlePdfOperationError, selectedPdfFiles]);
 
+  const handleRenderSelectedPdfPagesToImages = useCallback(async () => {
+    for (const file of selectedPdfFiles) {
+      try {
+        const images = await renderPdfPagesToPng(file.file);
+        images.forEach((image) => addCompletedPngResult(image.blob, image.suggestedName));
+      } catch (error) {
+        handlePdfOperationError(file, error, 'PDF-Seiten konnten nicht lokal als PNG gerendert werden.');
+      }
+    }
+    setSelectedIds([]);
+  }, [addCompletedPngResult, handlePdfOperationError, selectedPdfFiles]);
+
   const handleReorderSelectedPdf = useCallback(async (pageOrder: string) => {
     const [file] = selectedPdfFiles;
     if (!file) return;
@@ -284,6 +319,21 @@ const Index = () => {
       handlePdfOperationError(file, error, 'PDF konnte nicht lokal neu sortiert werden.');
     }
   }, [addCompletedPdfResult, handlePdfOperationError, selectedPdfFiles]);
+
+  const handleCreatePdfFromSelectedImages = useCallback(async () => {
+    if (selectedImageFiles.length === 0) return;
+
+    try {
+      const pdf = await imageFilesToPdf(selectedImageFiles.map((file) => file.file));
+      addCompletedPdfResult(pdf, `images-${selectedImageFiles.length}-pages`);
+      setSelectedIds([]);
+    } catch (error) {
+      updateFile(selectedImageFiles[0].id, {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Bilder konnten nicht lokal als PDF gebündelt werden.',
+      });
+    }
+  }, [addCompletedPdfResult, selectedImageFiles, updateFile]);
 
   const handleToggleRemoveBackground = useCallback((fileId: string, enabled: boolean) => {
     updateFile(fileId, { removeBackground: enabled });
@@ -315,7 +365,9 @@ const Index = () => {
             onAIRenameAll={selectedFileType === 'pdf' ? undefined : handleAIRenameSelected}
             isAIRenaming={isAnyAIRenaming}
             onCompressPdfs={handleCompressSelectedPdfs}
+            onCreatePdfFromImages={handleCreatePdfFromSelectedImages}
             onMergePdfs={handleMergeSelectedPdfs}
+            onRenderPdfPagesToImages={handleRenderSelectedPdfPagesToImages}
             onReorderPdf={handleReorderSelectedPdf}
             onRotatePdfs={handleRotateSelectedPdfs}
             onSplitPdfs={handleSplitSelectedPdfs}
