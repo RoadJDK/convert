@@ -9,6 +9,7 @@ Maibach Convert treats background, object, and watermark work as local edits for
 | Target | Current tier | Outcome | Evidence |
 | --- | --- | --- | --- |
 | Static lower-corner image watermark | `mask-cleanup` | Degraded pass: local copy/blur repair changes the masked pixels, but is not guaranteed to reconstruct the original background | `src/test/watermarkCleanup.test.ts`, Playwright `watermark cleanup` pixel smoke |
+| Manually selected image cleanup area | `mask-cleanup` | Degraded pass: user-selected source area is mapped into the rendered output canvas and repaired locally | `src/test/imageRenderPlan.test.ts`, `src/test/watermarkCleanup.test.ts`, Playwright `watermark cleanup` dialog smoke |
 | Image background | `background-model` | Pass/degraded depending on device and image size; runs in browser via installed `@imgly/background-removal` package | `src/test/localRemovalPlan.test.ts`, `src/test/backgroundRemoval.test.ts` |
 | Low-end or very large background job | `background-model` | Degraded: allowed, but expected to be slow or visibly imperfect | `src/test/localRemovalPlan.test.ts` |
 | Moving logo / moving watermark | `manual-export` | Fail for automatic removal in this slice; must not be marketed as supported | `src/test/localRemovalPlan.test.ts` |
@@ -22,7 +23,7 @@ Maibach Convert treats background, object, and watermark work as local edits for
 
 ## Known Gaps
 
-- No freehand object mask UI exists yet.
+- Rectangular manual object/watermark area selection exists for images; no freehand mask UI exists yet.
 - No video watermark/object removal exists yet.
 - No LaMa/BiRefNet/SAM-style inpainting upgrade has been selected or licensed in this slice.
 - Mobile/low-end behavior is capability-labeled but still needs visual device QA before any premium-quality claim.

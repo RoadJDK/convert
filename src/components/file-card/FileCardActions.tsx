@@ -21,6 +21,7 @@ type FileCardActionsProps = {
   originalDimensions?: Dimensions;
   removeBackgroundEnabled?: boolean;
   removeWatermarkEnabled?: boolean;
+  cleanupArea?: ConvertibleFile["cleanupArea"];
   showIndividualActions: boolean;
   onAIRename?: () => void;
   onConvert: () => void;
@@ -31,6 +32,7 @@ type FileCardActionsProps = {
   onSettingsChange: (settings: QualitySettings) => void;
   onToggleRemoveBackground?: (enabled: boolean) => void;
   onToggleRemoveWatermark?: (enabled: boolean) => void;
+  onCleanupAreaClick?: () => void;
 };
 
 export function FileCardActions({
@@ -39,6 +41,7 @@ export function FileCardActions({
   originalDimensions,
   removeBackgroundEnabled,
   removeWatermarkEnabled,
+  cleanupArea,
   showIndividualActions,
   onAIRename,
   onConvert,
@@ -49,6 +52,7 @@ export function FileCardActions({
   onSettingsChange,
   onToggleRemoveBackground,
   onToggleRemoveWatermark,
+  onCleanupAreaClick,
 }: FileCardActionsProps) {
   const toolButtonClass = "h-11 w-11 p-0 text-muted-foreground hover:text-foreground sm:h-8 sm:w-8";
   const pendingActionGridClass = cn(
@@ -94,6 +98,8 @@ export function FileCardActions({
             onRemoveBackgroundChange={onToggleRemoveBackground}
             removeWatermark={removeWatermarkEnabled}
             onRemoveWatermarkChange={onToggleRemoveWatermark}
+            cleanupArea={cleanupArea}
+            onCleanupAreaClick={onCleanupAreaClick}
           />
           <Button
             size="sm"

@@ -169,6 +169,7 @@ export const useFileConverter = () => {
         const options = {
           qualitySettings: fileItem.qualitySettings,
           cropArea: fileItem.cropArea,
+          cleanupArea: fileItem.cleanupArea,
           dimensions: fileItem.dimensions,
           trimRange: fileItem.trimRange,
           videoRotation: fileItem.videoRotation,
@@ -248,6 +249,7 @@ export const useFileConverter = () => {
             error: undefined,
             qualitySettings: { ...DEFAULT_QUALITY_SETTINGS },
             cropArea: undefined,
+            cleanupArea: undefined,
             trimRange: undefined,
             suggestedName: undefined,
             removeBackground: undefined,

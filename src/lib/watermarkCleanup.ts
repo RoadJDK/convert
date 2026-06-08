@@ -1,5 +1,7 @@
 import { createEncodingCanvas, type EncodingCanvas } from "@/lib/imageEncoding";
 import { createLocalRemovalPlan, type LocalRemovalPlan } from "@/lib/localRemovalPlan";
+import type { CropArea } from "@/types/converter";
+import { resolveCropAreaToSourcePixels } from "@/lib/cropMath";
 
 export interface ImageSize {
   width: number;
@@ -60,7 +62,30 @@ const createRegion = (
   };
 };
 
-export const createWatermarkCleanupPlan = (size: ImageSize): WatermarkCleanupPlan => {
+const createManualRegion = (size: ImageSize, manualArea: CropArea): WatermarkCleanupRegion => {
+  const target = resolveCropAreaToSourcePixels(manualArea, size);
+  const verticalShift = Math.max(target.height, Math.round(size.height * 0.16));
+  const shiftedUpY = target.y - verticalShift;
+  const shiftedDownY = target.y + verticalShift;
+  const sourceY = shiftedUpY >= 0
+    ? shiftedUpY
+    : clamp(shiftedDownY, 0, Math.max(0, size.height - target.height));
+
+  return {
+    x: target.x,
+    y: target.y,
+    width: target.width,
+    height: target.height,
+    source: {
+      x: target.x,
+      y: sourceY,
+      width: target.width,
+      height: target.height,
+    },
+  };
+};
+
+export const createWatermarkCleanupPlan = (size: ImageSize, manualArea?: CropArea): WatermarkCleanupPlan => {
   const safeWidth = Math.max(1, Math.round(size.width));
   const safeHeight = Math.max(1, Math.round(size.height));
   const regionWidth = Math.min(
@@ -74,6 +99,13 @@ export const createWatermarkCleanupPlan = (size: ImageSize): WatermarkCleanupPla
   const marginX = Math.round(safeWidth * 0.04);
   const marginY = Math.round(safeHeight * 0.08);
 
+  const regions = manualArea
+    ? [createManualRegion({ width: safeWidth, height: safeHeight }, manualArea)]
+    : [
+        createRegion("left", { width: safeWidth, height: safeHeight }, regionWidth, regionHeight, marginX, marginY),
+        createRegion("right", { width: safeWidth, height: safeHeight }, regionWidth, regionHeight, marginX, marginY),
+      ];
+
   return {
     blurRadius: clamp(Math.round(Math.min(safeWidth, safeHeight) * 0.012), 2, 10),
     removal: createLocalRemovalPlan({
@@ -81,14 +113,11 @@ export const createWatermarkCleanupPlan = (size: ImageSize): WatermarkCleanupPla
       width: safeWidth,
       height: safeHeight,
     }),
-    regions: [
-      createRegion("left", { width: safeWidth, height: safeHeight }, regionWidth, regionHeight, marginX, marginY),
-      createRegion("right", { width: safeWidth, height: safeHeight }, regionWidth, regionHeight, marginX, marginY),
-    ],
+    regions,
   };
 };
 
-export const applyWatermarkCleanup = (canvas: EncodingCanvas): void => {
+export const applyWatermarkCleanup = (canvas: EncodingCanvas, manualArea?: CropArea): void => {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new Error("Failed to create canvas context");
@@ -97,10 +126,13 @@ export const applyWatermarkCleanup = (canvas: EncodingCanvas): void => {
   const { canvas: snapshot, context: snapshotCtx } = createEncodingCanvas(canvas.width, canvas.height);
   snapshotCtx.drawImage(canvas, 0, 0);
 
-  const plan = createWatermarkCleanupPlan({
-    width: canvas.width,
-    height: canvas.height,
-  });
+  const plan = createWatermarkCleanupPlan(
+    {
+      width: canvas.width,
+      height: canvas.height,
+    },
+    manualArea,
+  );
 
   for (const region of plan.regions) {
     ctx.save();

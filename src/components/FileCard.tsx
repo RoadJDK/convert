@@ -33,6 +33,7 @@ interface FileCardProps {
   onToggleRemoveBackground?: (enabled: boolean) => void;
   removeWatermarkEnabled?: boolean;
   onToggleRemoveWatermark?: (enabled: boolean) => void;
+  onCleanupAreaClick?: () => void;
 }
 
 export const FileCard = ({
@@ -54,6 +55,7 @@ export const FileCard = ({
   onToggleRemoveBackground,
   removeWatermarkEnabled,
   onToggleRemoveWatermark,
+  onCleanupAreaClick,
 }: FileCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -136,6 +138,7 @@ export const FileCard = ({
             <span className="hidden sm:inline">{file.originalName} • </span>
             {formatFileSize(file.file.size)}
             {file.cropArea && <span className="ml-2 text-primary">• Zugeschnitten</span>}
+            {file.cleanupArea && <span className="ml-2 text-primary">• Bereinigungsbereich</span>}
             {file.trimRange && <span className="ml-2 text-accent">• Geschnitten</span>}
             {file.videoRotation && <span className="ml-2 text-accent">• Gedreht</span>}
           </p>
@@ -179,6 +182,7 @@ export const FileCard = ({
           originalDimensions={originalDimensions}
           removeBackgroundEnabled={removeBackgroundEnabled}
           removeWatermarkEnabled={removeWatermarkEnabled}
+          cleanupArea={file.cleanupArea}
           showIndividualActions={showIndividualActions}
           onAIRename={onAIRename}
           onConvert={onConvert}
@@ -189,6 +193,7 @@ export const FileCard = ({
           onSettingsChange={onSettingsChange}
           onToggleRemoveBackground={onToggleRemoveBackground}
           onToggleRemoveWatermark={onToggleRemoveWatermark}
+          onCleanupAreaClick={onCleanupAreaClick}
         />
       </div>
     </div>

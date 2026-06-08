@@ -6,6 +6,8 @@ import { DEFAULT_QUALITY_SETTINGS } from "@/types/converter";
 
 describe("QualitySettings", () => {
   it("labels removal controls with local authorization and limitation copy", async () => {
+    const onCleanupAreaClick = vi.fn();
+
     render(
       <QualitySettings
         settings={DEFAULT_QUALITY_SETTINGS}
@@ -15,6 +17,7 @@ describe("QualitySettings", () => {
         onRemoveBackgroundChange={vi.fn()}
         removeWatermark={false}
         onRemoveWatermarkChange={vi.fn()}
+        onCleanupAreaClick={onCleanupAreaClick}
       />,
     );
 
@@ -24,5 +27,7 @@ describe("QualitySettings", () => {
     expect(screen.getByLabelText("Watermark bereinigen")).toBeInTheDocument();
     expect(screen.getByText(/Nur für eigene Bilder/i)).toBeInTheDocument();
     expect(screen.getByText(/keine echte Inpainting-Garantie/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Bereich wählen" }));
+    expect(onCleanupAreaClick).toHaveBeenCalledTimes(1);
   });
 });

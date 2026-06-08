@@ -23,6 +23,7 @@ import { CropFrameIcon } from '@/components/icons/MediaConvertIcons';
 interface CropDialogProps {
   file: ConvertibleFile | null;
   open: boolean;
+  mode?: "crop" | "cleanup";
   onClose: () => void;
   onApply: (
     cropArea: CropArea | undefined, 
@@ -37,7 +38,15 @@ const MIN_DRAWN_CROP_SIZE_PX = 4;
 const isMeaningfulCrop = (crop: PixelCrop) =>
   crop.width >= MIN_DRAWN_CROP_SIZE_PX && crop.height >= MIN_DRAWN_CROP_SIZE_PX;
 
-export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) => {
+const areaToPercentCrop = (area: CropArea): PercentCrop => ({
+  unit: "%",
+  x: area.x * 100,
+  y: area.y * 100,
+  width: area.width * 100,
+  height: area.height * 100,
+});
+
+export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: CropDialogProps) => {
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const {
@@ -128,13 +137,20 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
     }
   }, [open, resetAspectInputs, stopPlayback]);
 
+  const isCleanupMode = mode === "cleanup";
+
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const { naturalWidth, naturalHeight } = e.currentTarget;
     setMediaDimensions({ width: naturalWidth, height: naturalHeight });
+
+    if (isCleanupMode) {
+      setCrop(areaToPercentCrop(file?.cleanupArea ?? { x: 0.62, y: 0.58, width: 0.28, height: 0.28 }));
+      return;
+    }
     
     const crop = centerAspectCrop(naturalWidth, naturalHeight, naturalWidth / naturalHeight);
     setCrop(crop);
-  }, [setMediaDimensions]);
+  }, [file?.cleanupArea, isCleanupMode, setMediaDimensions]);
 
   // When crop is completed (mouse released), sync dimensions and aspect ratio
   const handleCropChange = useCallback((pixelCrop: PixelCrop, percentCrop: PercentCrop) => {
@@ -186,14 +202,26 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
           { width: videoRef.current.clientWidth, height: videoRef.current.clientHeight },
         );
       }
+    } else if (isCleanupMode && crop && crop.unit === '%' && file?.type === 'image') {
+      cropArea = {
+        x: Number(((crop.x ?? 0) / 100).toFixed(6)),
+        y: Number(((crop.y ?? 0) / 100).toFixed(6)),
+        width: Number(((crop.width ?? 0) / 100).toFixed(6)),
+        height: Number(((crop.height ?? 0) / 100).toFixed(6)),
+      };
     }
 
     // Get trim range for videos
-    if (file?.type === 'video' && (trimStart > 0 || trimEnd < videoDuration)) {
+    if (!isCleanupMode && file?.type === 'video' && (trimStart > 0 || trimEnd < videoDuration)) {
       trimRange = { start: trimStart, end: trimEnd };
     }
 
-    onApply(cropArea, dimensions, trimRange, isVideo && videoRotation !== 0 ? videoRotation : undefined);
+    onApply(
+      cropArea,
+      isCleanupMode ? undefined : dimensions,
+      trimRange,
+      !isCleanupMode && isVideo && videoRotation !== 0 ? videoRotation : undefined,
+    );
     onClose();
   };
 
@@ -230,7 +258,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
   if (!file) return null;
 
   const isVideo = file.type === 'video';
-  const cropAspect = cropAspectLocked && dimensions.width > 0 && dimensions.height > 0
+  const cropAspect = !isCleanupMode && cropAspectLocked && dimensions.width > 0 && dimensions.height > 0
     ? dimensions.width / dimensions.height
     : undefined;
 
@@ -240,10 +268,12 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <CropFrameIcon className="h-5 w-5" />
-            {isVideo ? 'Video bearbeiten' : 'Bild bearbeiten'}
+            {isCleanupMode ? 'Bereich bereinigen' : isVideo ? 'Video bearbeiten' : 'Bild bearbeiten'}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Ausschnitt, Zielgröße und bei Videos den Trim-Bereich einstellen.
+            {isCleanupMode
+              ? 'Bereich für lokale Objekt- oder Watermark-Bereinigung markieren.'
+              : 'Ausschnitt, Zielgröße und bei Videos den Trim-Bereich einstellen.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -289,7 +319,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
               )}
             </div>
 
-            {isVideo && (
+            {!isCleanupMode && isVideo && (
               <VideoTrimControls
                 currentTime={currentTime}
                 duration={videoDuration}
@@ -305,22 +335,28 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
           </div>
 
           <div className="space-y-3">
-            <ResizeControls
-              aspectHeight={aspectHeight}
-              aspectLocked={aspectLocked}
-              aspectWidth={aspectWidth}
-              completedCrop={completedCrop}
-              cropAspectLocked={cropAspectLocked}
-              dimensions={dimensions}
-              originalDimensions={originalDimensions}
-              onAspectHeightChange={handleAspectHeightChange}
-              onAspectWidthChange={handleAspectWidthChange}
-              onDimensionChange={handleDimensionChange}
-              onResetDimensions={handleResetDimensions}
-              onToggleAspectLock={toggleAspectLock}
-              onToggleCropAspect={toggleCropAspect}
-            />
-            {isVideo && (
+            {isCleanupMode ? (
+              <div className="rounded-lg border border-border bg-secondary/30 p-3 text-sm text-muted-foreground">
+                Markiere nur eigene oder autorisierte Inhalte. Die Bereinigung kopiert lokale Hintergrundpixel und ist keine Inpainting-Garantie.
+              </div>
+            ) : (
+              <ResizeControls
+                aspectHeight={aspectHeight}
+                aspectLocked={aspectLocked}
+                aspectWidth={aspectWidth}
+                completedCrop={completedCrop}
+                cropAspectLocked={cropAspectLocked}
+                dimensions={dimensions}
+                originalDimensions={originalDimensions}
+                onAspectHeightChange={handleAspectHeightChange}
+                onAspectWidthChange={handleAspectWidthChange}
+                onDimensionChange={handleDimensionChange}
+                onResetDimensions={handleResetDimensions}
+                onToggleAspectLock={toggleAspectLock}
+                onToggleCropAspect={toggleCropAspect}
+              />
+            )}
+            {!isCleanupMode && isVideo && (
               <VideoRotationControls
                 rotation={videoRotation}
                 onReset={handleVideoRotationReset}
@@ -336,7 +372,7 @@ export const CropDialog = ({ file, open, onClose, onApply }: CropDialogProps) =>
             Abbrechen
           </Button>
           <Button onClick={handleApply}>
-            Anwenden
+            {isCleanupMode ? 'Bereich verwenden' : 'Anwenden'}
           </Button>
         </DialogFooter>
       </DialogContent>

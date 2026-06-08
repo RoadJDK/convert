@@ -36,6 +36,8 @@ interface QualitySettingsProps {
   onRemoveBackgroundChange?: (enabled: boolean) => void;
   removeWatermark?: boolean;
   onRemoveWatermarkChange?: (enabled: boolean) => void;
+  cleanupArea?: CropArea;
+  onCleanupAreaClick?: () => void;
 }
 
 export const QualitySettings = ({ 
@@ -51,6 +53,8 @@ export const QualitySettings = ({
   onRemoveBackgroundChange,
   removeWatermark,
   onRemoveWatermarkChange,
+  cleanupArea,
+  onCleanupAreaClick,
 }: QualitySettingsProps) => {
   const [open, setOpen] = useState(false);
   const backgroundRemovalId = useId();
@@ -180,6 +184,20 @@ export const QualitySettings = ({
                   <p id={watermarkRemovalDescriptionId} className="text-xs leading-relaxed text-muted-foreground">
                     {watermarkRemovalPlan.uiDescription}
                   </p>
+                  {onCleanupAreaClick && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-full text-xs"
+                      onClick={() => {
+                        setOpen(false);
+                        onCleanupAreaClick();
+                      }}
+                    >
+                      {cleanupArea ? "Bereich ändern" : "Bereich wählen"}
+                    </Button>
+                  )}
                 </div>
               )}
             </div>

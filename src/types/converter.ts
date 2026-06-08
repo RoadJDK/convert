@@ -57,6 +57,7 @@ export interface ConvertibleFile {
   error?: string;
   qualitySettings: QualitySettings;
   cropArea?: CropArea;
+  cleanupArea?: CropArea;
   dimensions?: { width: number; height: number };
   originalSize: number;
   convertedSize?: number;
@@ -66,7 +67,7 @@ export interface ConvertibleFile {
   videoDuration?: number;
   // Image-specific
   removeBackground?: boolean; // Toggle for background removal during conversion
-  removeWatermark?: boolean; // Toggle for local lower-corner watermark cleanup during conversion
+  removeWatermark?: boolean; // Toggle for local/manual watermark cleanup during conversion
 }
 
 export const DEFAULT_QUALITY_SETTINGS: QualitySettings = {

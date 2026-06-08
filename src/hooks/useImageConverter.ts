@@ -13,7 +13,7 @@ import {
 } from "@/lib/imageEncoding";
 import { applyWatermarkCleanup } from "@/lib/watermarkCleanup";
 import { readDisplayableImageAsDataUrl } from "@/lib/displayableImage";
-import { resolveImageRenderPlan } from "@/lib/imageRenderPlan";
+import { resolveImageRenderPlan, resolveRenderedCleanupArea } from "@/lib/imageRenderPlan";
 
 interface ConversionResult {
   blob: Blob;
@@ -23,6 +23,7 @@ interface ConversionResult {
 interface ConversionOptions {
   qualitySettings: QualitySettings;
   cropArea?: CropArea;
+  cleanupArea?: CropArea;
   dimensions?: { width: number; height: number };
   addWhiteBackground?: boolean;
   removeWatermark?: boolean;
@@ -44,12 +45,16 @@ export const useImageConverter = () => {
         img.onload = async () => {
           onProgress(40);
 
-          const { qualitySettings, cropArea, dimensions, addWhiteBackground, removeWatermark } = options;
+          const { qualitySettings, cropArea, cleanupArea, dimensions, addWhiteBackground, removeWatermark } = options;
           const outputFormat = (qualitySettings.outputFormat as ImageOutputFormat) || "webp";
+          const sourceDimensions = {
+            width: img.naturalWidth || img.width,
+            height: img.naturalHeight || img.height,
+          };
 
           const renderPlan = resolveImageRenderPlan({
-            sourceWidth: img.naturalWidth || img.width,
-            sourceHeight: img.naturalHeight || img.height,
+            sourceWidth: sourceDimensions.width,
+            sourceHeight: sourceDimensions.height,
             cropArea,
             dimensions,
             scale: qualitySettings.scale,
@@ -72,7 +77,14 @@ export const useImageConverter = () => {
 
           ctx.drawImage(img, source.x, source.y, source.width, source.height, 0, 0, target.width, target.height);
           if (removeWatermark) {
-            applyWatermarkCleanup(canvas);
+            applyWatermarkCleanup(
+              canvas,
+              resolveRenderedCleanupArea({
+                cleanupArea,
+                renderSource: source,
+                sourceSize: sourceDimensions,
+              }),
+            );
           }
           onProgress(60);
 

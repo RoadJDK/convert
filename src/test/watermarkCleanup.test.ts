@@ -56,4 +56,20 @@ describe("createWatermarkCleanupPlan", () => {
       uiLabel: "Watermark bereinigen",
     });
   });
+
+  it("uses a manually selected cleanup area instead of default corner regions", () => {
+    const plan = createWatermarkCleanupPlan(
+      { width: 1000, height: 500 },
+      { x: 0.2, y: 0.25, width: 0.3, height: 0.2 },
+    );
+
+    expect(plan.regions).toHaveLength(1);
+    expect(plan.regions[0]).toMatchObject({
+      x: 200,
+      y: 125,
+      width: 300,
+      height: 100,
+    });
+    expect(plan.regions[0].source.y).toBeLessThan(plan.regions[0].y);
+  });
 });

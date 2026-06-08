@@ -34,6 +34,7 @@ const Index = () => {
   const { generateName, isLoading: aiRenameLoading } = useAIRename();
   
   const [cropDialogFile, setCropDialogFile] = useState<ConvertibleFile | null>(null);
+  const [cleanupDialogFile, setCleanupDialogFile] = useState<ConvertibleFile | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const pendingFiles = useMemo(() => files.filter(f => f.status === 'pending'), [files]);
@@ -88,6 +89,15 @@ const Index = () => {
       updateFileCrop(cropDialogFile.id, cropArea, dimensions, trimRange, videoRotation);
     }
   }, [cropDialogFile, updateFileCrop]);
+
+  const handleCleanupAreaApply = useCallback((cleanupArea: CropArea | undefined) => {
+    if (cleanupDialogFile) {
+      updateFile(cleanupDialogFile.id, {
+        cleanupArea,
+        removeWatermark: Boolean(cleanupArea),
+      });
+    }
+  }, [cleanupDialogFile, updateFile]);
 
   const handleBulkApply = useCallback((updates: Partial<{ qualitySettings: QualitySettings }>) => {
     if (selectedPendingIds.length > 0) {
@@ -153,7 +163,7 @@ const Index = () => {
   }, [updateFile]);
 
   const handleToggleRemoveWatermark = useCallback((fileId: string, enabled: boolean) => {
-    updateFile(fileId, { removeWatermark: enabled });
+    updateFile(fileId, enabled ? { removeWatermark: true } : { removeWatermark: false, cleanupArea: undefined });
   }, [updateFile]);
 
   const pendingCount = files.filter((f) => f.status === 'pending').length;
@@ -216,6 +226,7 @@ const Index = () => {
                     onToggleRemoveBackground={(enabled) => handleToggleRemoveBackground(file.id, enabled)}
                     removeWatermarkEnabled={file.removeWatermark}
                     onToggleRemoveWatermark={(enabled) => handleToggleRemoveWatermark(file.id, enabled)}
+                    onCleanupAreaClick={() => setCleanupDialogFile(file)}
                   />
                 ))}
               </div>
@@ -251,9 +262,17 @@ const Index = () => {
       {/* Crop Dialog */}
       <CropDialog
         file={cropDialogFile}
+        mode="crop"
         open={!!cropDialogFile}
         onClose={() => setCropDialogFile(null)}
         onApply={handleCropApply}
+      />
+      <CropDialog
+        file={cleanupDialogFile}
+        mode="cleanup"
+        open={!!cleanupDialogFile}
+        onClose={() => setCleanupDialogFile(null)}
+        onApply={handleCleanupAreaApply}
       />
     </div>
   );

@@ -672,7 +672,11 @@ test("applies the image watermark cleanup option", async ({ page }) => {
   await expect(page.getByText(/keine echte Inpainting-Garantie/)).toBeVisible();
   await page.getByLabel("Watermark bereinigen").click();
   await expect(page.getByLabel("Watermark bereinigen")).toHaveAttribute("aria-checked", "true");
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Bereich wählen" }).click();
+  await expect(page.getByRole("dialog")).toContainText("Bereich bereinigen");
+  await expect(page.getByRole("dialog")).toContainText(/keine Inpainting-Garantie/);
+  await page.getByRole("button", { name: "Bereich verwenden" }).click();
+  await expect(page.getByText(/Bereinigungsbereich/)).toBeVisible();
 
   await page.getByRole("button", { name: /^Start$/ }).click();
   await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();

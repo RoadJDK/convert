@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveImageRenderPlan } from "@/lib/imageRenderPlan";
+import { resolveImageRenderPlan, resolveRenderedCleanupArea } from "@/lib/imageRenderPlan";
 
 describe("image render plan", () => {
   it("resolves normalized source crops to decoded image pixels and scaled target dimensions", () => {
@@ -31,6 +31,25 @@ describe("image render plan", () => {
       source: { x: 300, y: 0, width: 600, height: 1800 },
       target: { width: 600, height: 900 },
       orientationBoundary: "browser-decoded",
+    });
+  });
+
+  it("maps a source cleanup area into the rendered crop canvas", () => {
+    const renderPlan = resolveImageRenderPlan({
+      sourceWidth: 1000,
+      sourceHeight: 500,
+      cropArea: { x: 0.25, y: 0, width: 0.5, height: 1 },
+    });
+
+    expect(resolveRenderedCleanupArea({
+      cleanupArea: { x: 0.35, y: 0.2, width: 0.2, height: 0.3 },
+      renderSource: renderPlan.source,
+      sourceSize: { width: 1000, height: 500 },
+    })).toEqual({
+      x: 0.2,
+      y: 0.2,
+      width: 0.4,
+      height: 0.3,
     });
   });
 });
