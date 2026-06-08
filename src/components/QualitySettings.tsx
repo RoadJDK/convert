@@ -63,6 +63,17 @@ export const QualitySettings = ({
     onChange({ ...settings, percentage: value[0] });
   };
 
+  const handleScaleChange = (value: number[]) => {
+    onChange({ ...settings, scale: value[0] });
+  };
+
+  const handleScaleInputChange = (value: string) => {
+    const num = parseInt(value, 10);
+    if (!isNaN(num) && num >= 10 && num <= 200) {
+      onChange({ ...settings, scale: num });
+    }
+  };
+
   const handleMaxSizeChange = (value: string) => {
     const num = parseInt(value, 10);
     if (!isNaN(num) && num > 0) {
@@ -169,6 +180,30 @@ export const QualitySettings = ({
               <p className="text-xs text-muted-foreground">
                 100% = Standard • 200% = Maximum
               </p>
+              <div className="flex items-center justify-between gap-3 pt-2">
+                <Label className="text-xs">Skalierung</Label>
+                <div className="flex items-center gap-1">
+                  <Input
+                    aria-label="Skalierung"
+                    type="number"
+                    value={settings.scale}
+                    onChange={(event) => handleScaleInputChange(event.target.value)}
+                    className="h-8 w-16 text-sm"
+                    min={10}
+                    max={200}
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
+              </div>
+              <Slider
+                value={[settings.scale]}
+                onValueChange={handleScaleChange}
+                min={10}
+                max={200}
+                step={5}
+                className="w-full"
+                data-testid="scale-slider"
+              />
               {estimatedSize && originalSize && (
                 <p className="text-xs text-primary font-medium">
                   Geschätzte Größe: ~{formatFileSize(estimatedSize)} ({Math.round((estimatedSize / originalSize) * 100)}% der Originalgröße)

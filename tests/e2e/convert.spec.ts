@@ -503,3 +503,72 @@ test("opens the video editor with trim controls for a real browser-generated Web
 
   await guards.assertClean();
 });
+
+test("resizes a video through the WebCodecs path without crop or trim fallback", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "WebCodecs resize smoke is covered once in Chromium desktop");
+  const guards = installPageGuards(page);
+  const sampleWebm = await createSampleWebm(page);
+
+  await page.evaluate(() => {
+    const win = window as Window & {
+      __convertedVideoBlobs?: Blob[];
+      __originalCreateObjectURL?: typeof URL.createObjectURL;
+    };
+
+    if (!win.__originalCreateObjectURL) {
+      win.__originalCreateObjectURL = URL.createObjectURL.bind(URL);
+    }
+
+    win.__convertedVideoBlobs = [];
+    URL.createObjectURL = (object: Blob | MediaSource) => {
+      if (object instanceof Blob && object.type.startsWith("video/")) {
+        win.__convertedVideoBlobs?.push(object);
+      }
+      return win.__originalCreateObjectURL?.(object) ?? "";
+    };
+  });
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "resize-smoke.webm",
+    mimeType: "video/webm",
+    buffer: sampleWebm,
+  });
+
+  await expect(page.getByText("resize-smoke.webm", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Qualitätseinstellungen" }).click();
+  await page.getByLabel("Skalierung").fill("50");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: /^Start$/ }).click();
+  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+
+  const metadata = await page.evaluate(async () => {
+    const blobs = (window as Window & { __convertedVideoBlobs?: Blob[] }).__convertedVideoBlobs ?? [];
+    const blob = blobs.at(-1);
+    if (!blob) throw new Error("Missing converted video blob");
+
+    const url = URL.createObjectURL(blob);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.src = url;
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error("Converted video metadata could not be loaded"));
+    });
+    const result = {
+      height: video.videoHeight,
+      size: blob.size,
+      type: blob.type,
+      width: video.videoWidth,
+    };
+    URL.revokeObjectURL(url);
+    return result;
+  });
+
+  expect(metadata.type).toBe("video/webm");
+  expect(metadata.width).toBe(32);
+  expect(metadata.height).toBe(32);
+  expect(metadata.size).toBeGreaterThan(0);
+
+  await guards.assertClean();
+});

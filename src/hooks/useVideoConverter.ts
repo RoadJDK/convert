@@ -1,7 +1,11 @@
 import { useCallback, useRef } from "react";
 import { canReencodeAudioTrack, canReencodeVideoTrack, convertMedia, webcodecsController } from "@remotion/webcodecs";
 import type { CropArea, QualitySettings, TrimRange, VideoOutputFormat } from "@/types/converter";
-import { createVideoEncodingPlan } from "@/lib/videoConversionPlan";
+import {
+  createVideoConversionStrategy,
+  createVideoEncodingPlan,
+  createWebCodecsResizeOperation,
+} from "@/lib/videoConversionPlan";
 import { convertWithMediaRecorder } from "@/lib/videoMediaRecorderConversion";
 import { extractFrame, getVideoDuration } from "@/lib/videoMetadata";
 
@@ -33,12 +37,17 @@ export const useVideoConverter = () => {
 
       const outputFormat = (options.qualitySettings.outputFormat || "webm") as VideoOutputFormat;
       const encodingPlan = createVideoEncodingPlan(outputFormat);
+      const resizeOperation = createWebCodecsResizeOperation({
+        dimensions: options.dimensions,
+        scale: options.qualitySettings.scale,
+      });
 
       console.log("[VideoConverter] Converting with WebCodecs:", {
         container: encodingPlan.container,
         videoCodec: encodingPlan.videoCodec,
         audioCodec: encodingPlan.audioCodec,
         isSafari: isSafari(),
+        resizeOperation,
       });
 
       const result = await convertMedia({
@@ -47,6 +56,7 @@ export const useVideoConverter = () => {
         videoCodec: encodingPlan.videoCodec,
         audioCodec: encodingPlan.audioCodec,
         controller: controllerRef.current,
+        resize: resizeOperation ?? undefined,
         onProgress: ({ overallProgress }) => {
           if (overallProgress !== null) {
             onProgress(5 + overallProgress * 90);
@@ -56,11 +66,11 @@ export const useVideoConverter = () => {
           const canReencode = await canReencodeVideoTrack({
             track,
             videoCodec: encodingPlan.videoCodec,
-            resizeOperation: null,
+            resizeOperation,
             rotate: 0,
           });
           return canReencode
-            ? { type: "reencode", videoCodec: encodingPlan.videoCodec, resize: null, rotate: 0 }
+            ? { type: "reencode", videoCodec: encodingPlan.videoCodec, resize: resizeOperation, rotate: 0 }
             : { type: "copy" };
         },
         onAudioTrack: async ({ track }) => {
@@ -104,18 +114,27 @@ export const useVideoConverter = () => {
         outputFormat: options.qualitySettings.outputFormat,
       });
 
-      const hasEdits = Boolean(options.cropArea || options.dimensions || options.trimRange);
+      const hasCrop = Boolean(options.cropArea);
+      const hasTrim = Boolean(options.trimRange);
+      const hasResize = Boolean(options.dimensions) || options.qualitySettings.scale !== 100;
+      const strategy = createVideoConversionStrategy({
+        webCodecsSupported: isWebCodecsSupported(),
+        hasCrop,
+        hasDimensions: hasResize,
+        hasTrim,
+      });
 
-      if (hasEdits) {
+      if (strategy.engine === "mediarecorder") {
+        if (strategy.degraded) {
+          console.warn("[VideoConverter] Using degraded MediaRecorder fallback:", strategy.reason);
+        }
         return convertWithMediaRecorder(file, onProgress, options);
       }
 
-      if (isWebCodecsSupported()) {
-        try {
-          return await convertWithWebCodecs(file, onProgress, options);
-        } catch (webCodecsError) {
-          console.warn("[VideoConverter] WebCodecs failed, trying fallback:", webCodecsError);
-        }
+      try {
+        return await convertWithWebCodecs(file, onProgress, options);
+      } catch (webCodecsError) {
+        console.warn("[VideoConverter] WebCodecs failed, trying degraded fallback:", webCodecsError);
       }
 
       return convertWithMediaRecorder(file, onProgress, options);

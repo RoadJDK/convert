@@ -28,6 +28,32 @@ export type VideoRenderPlan = {
   trim: { start: number; end: number; safeStart: number; duration: number };
 };
 
+type CreateVideoConversionStrategyOptions = {
+  webCodecsSupported: boolean;
+  hasCrop: boolean;
+  hasDimensions: boolean;
+  hasTrim: boolean;
+};
+
+export type VideoConversionStrategy = {
+  engine: "webcodecs" | "mediarecorder";
+  degraded: boolean;
+  reason:
+    | "webcodecs-supported-edit"
+    | "webcodecs-supported-remux"
+    | "crop-trim-requires-frame-edit-muxer"
+    | "webcodecs-unavailable";
+};
+
+type CreateWebCodecsResizeOperationOptions = {
+  dimensions?: { width: number; height: number };
+  scale?: number;
+};
+
+export type WebCodecsResizeOperation =
+  | { mode: "max-height-width"; maxHeight: number; maxWidth: number }
+  | { mode: "scale"; scale: number };
+
 export function createVideoEncodingPlan(outputFormat: VideoOutputFormat = "webm"): VideoEncodingPlan {
   if (outputFormat === "mp4") {
     return {
@@ -62,6 +88,59 @@ export function chooseMediaRecorderMimeType(
       : ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp8", "video/webm"];
 
   return candidates.find(isTypeSupported) ?? null;
+}
+
+export function createVideoConversionStrategy({
+  webCodecsSupported,
+  hasCrop,
+  hasDimensions,
+  hasTrim,
+}: CreateVideoConversionStrategyOptions): VideoConversionStrategy {
+  if (!webCodecsSupported) {
+    return {
+      engine: "mediarecorder",
+      degraded: true,
+      reason: "webcodecs-unavailable",
+    };
+  }
+
+  if (hasCrop || hasTrim) {
+    return {
+      engine: "mediarecorder",
+      degraded: true,
+      reason: "crop-trim-requires-frame-edit-muxer",
+    };
+  }
+
+  return {
+    engine: "webcodecs",
+    degraded: false,
+    reason: hasDimensions ? "webcodecs-supported-edit" : "webcodecs-supported-remux",
+  };
+}
+
+export function createWebCodecsResizeOperation({
+  dimensions,
+  scale = 100,
+}: CreateWebCodecsResizeOperationOptions): WebCodecsResizeOperation | null {
+  const scaleFactor = clamp(scale / 100, 0.01, 4);
+
+  if (dimensions) {
+    return {
+      mode: "max-height-width",
+      maxWidth: toEvenDimension(dimensions.width * scaleFactor),
+      maxHeight: toEvenDimension(dimensions.height * scaleFactor),
+    };
+  }
+
+  if (Math.abs(scaleFactor - 1) > 0.001) {
+    return {
+      mode: "scale",
+      scale: scaleFactor,
+    };
+  }
+
+  return null;
 }
 
 export function resolveVideoRenderPlan(options: ResolveVideoRenderPlanOptions): VideoRenderPlan {

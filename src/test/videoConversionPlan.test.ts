@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   chooseMediaRecorderMimeType,
+  createVideoConversionStrategy,
   createVideoEncodingPlan,
+  createWebCodecsResizeOperation,
   resolveVideoRenderPlan,
 } from "@/lib/videoConversionPlan";
 
@@ -50,5 +52,66 @@ describe("video conversion plan", () => {
     expect(plan.source).toEqual({ x: 0, y: 10, width: 1280, height: 710 });
     expect(plan.target).toEqual({ width: 102, height: 100 });
     expect(plan.trim).toEqual({ start: 9, end: 10, safeStart: 9, duration: 1 });
+  });
+
+  it("uses WebCodecs first for resize-only edits", () => {
+    expect(
+      createVideoConversionStrategy({
+        webCodecsSupported: true,
+        hasCrop: false,
+        hasDimensions: true,
+        hasTrim: false,
+      }),
+    ).toEqual({
+      engine: "webcodecs",
+      degraded: false,
+      reason: "webcodecs-supported-edit",
+    });
+  });
+
+  it("marks crop and trim as degraded MediaRecorder fallback until the demux/mux edit path exists", () => {
+    expect(
+      createVideoConversionStrategy({
+        webCodecsSupported: true,
+        hasCrop: true,
+        hasDimensions: false,
+        hasTrim: true,
+      }),
+    ).toEqual({
+      engine: "mediarecorder",
+      degraded: true,
+      reason: "crop-trim-requires-frame-edit-muxer",
+    });
+  });
+
+  it("uses MediaRecorder as an explicit unsupported-browser fallback", () => {
+    expect(
+      createVideoConversionStrategy({
+        webCodecsSupported: false,
+        hasCrop: false,
+        hasDimensions: true,
+        hasTrim: false,
+      }),
+    ).toEqual({
+      engine: "mediarecorder",
+      degraded: true,
+      reason: "webcodecs-unavailable",
+    });
+  });
+
+  it("maps target dimensions and scale to a WebCodecs resize operation", () => {
+    expect(createWebCodecsResizeOperation({ dimensions: { width: 101, height: 99 }, scale: 150 })).toEqual({
+      mode: "max-height-width",
+      maxWidth: 152,
+      maxHeight: 150,
+    });
+  });
+
+  it("maps scale-only edits to a WebCodecs scale operation", () => {
+    expect(createWebCodecsResizeOperation({ scale: 50 })).toEqual({
+      mode: "scale",
+      scale: 0.5,
+    });
+    expect(createWebCodecsResizeOperation({ scale: 100 })).toBeNull();
   });
 });
