@@ -13,6 +13,7 @@ import { CleanupMask, ConvertibleFile, CropArea, QualitySettings, TrimRange, Fil
 import { runLimitedConcurrency } from '@/lib/conversionQueue';
 import { imageFilesToPdf } from '@/lib/imageToPdf';
 import { renderPdfPagesToPng } from '@/lib/pdfPageRendering';
+import { createSearchablePdfFromImages } from '@/lib/searchablePdf';
 import {
   compressPdfFile,
   mergePdfFiles,
@@ -335,6 +336,21 @@ const Index = () => {
     }
   }, [addCompletedPdfResult, selectedImageFiles, updateFile]);
 
+  const handleCreateSearchablePdfFromSelectedImages = useCallback(async () => {
+    if (selectedImageFiles.length === 0) return;
+
+    try {
+      const pdf = await createSearchablePdfFromImages(selectedImageFiles.map((file) => file.file));
+      addCompletedPdfResult(pdf, `ocr-${selectedImageFiles.length}-pages`);
+      setSelectedIds([]);
+    } catch (error) {
+      updateFile(selectedImageFiles[0].id, {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'OCR-PDF konnte nicht lokal erstellt werden.',
+      });
+    }
+  }, [addCompletedPdfResult, selectedImageFiles, updateFile]);
+
   const handleToggleRemoveBackground = useCallback((fileId: string, enabled: boolean) => {
     updateFile(fileId, { removeBackground: enabled });
   }, [updateFile]);
@@ -366,6 +382,7 @@ const Index = () => {
             isAIRenaming={isAnyAIRenaming}
             onCompressPdfs={handleCompressSelectedPdfs}
             onCreatePdfFromImages={handleCreatePdfFromSelectedImages}
+            onCreateSearchablePdfFromImages={handleCreateSearchablePdfFromSelectedImages}
             onMergePdfs={handleMergeSelectedPdfs}
             onRenderPdfPagesToImages={handleRenderSelectedPdfPagesToImages}
             onReorderPdf={handleReorderSelectedPdf}

@@ -23,6 +23,7 @@ interface BulkSettingsSidebarProps {
   isAIRenaming?: boolean;
   onCompressPdfs?: () => void;
   onCreatePdfFromImages?: () => void;
+  onCreateSearchablePdfFromImages?: () => void;
   onMergePdfs?: () => void;
   onRenderPdfPagesToImages?: () => void;
   onReorderPdf?: (pageOrder: string) => void;
@@ -40,6 +41,7 @@ export const BulkSettingsSidebar = ({
   isAIRenaming,
   onCompressPdfs,
   onCreatePdfFromImages,
+  onCreateSearchablePdfFromImages,
   onMergePdfs,
   onRenderPdfPagesToImages,
   onReorderPdf,
@@ -200,23 +202,36 @@ export const BulkSettingsSidebar = ({
           </div>
         )}
 
-        {selectedType === 'image' && onCreatePdfFromImages && (
+        {selectedType === 'image' && (onCreatePdfFromImages || onCreateSearchablePdfFromImages) && (
           <div className="space-y-3 rounded-lg border border-white/10 bg-white/[0.055] p-4">
             <div>
               <h3 className="text-sm font-medium">PDF erstellen</h3>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                Bilder werden lokal im Browser als PDF gebündelt. Originale bleiben unverändert.
+                Bilder und OCR-PDFs werden lokal im Browser erstellt. Originale bleiben unverändert.
               </p>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full gap-2"
-              onClick={onCreatePdfFromImages}
-            >
-              <BatchFilesIcon className="h-4 w-4" />
-              Bilder als PDF bündeln
-            </Button>
+            {onCreatePdfFromImages && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2"
+                onClick={onCreatePdfFromImages}
+              >
+                <BatchFilesIcon className="h-4 w-4" />
+                Bilder als PDF bündeln
+              </Button>
+            )}
+            {onCreateSearchablePdfFromImages && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2"
+                onClick={onCreateSearchablePdfFromImages}
+              >
+                <BatchFilesIcon className="h-4 w-4" />
+                OCR-PDF erstellen
+              </Button>
+            )}
           </div>
         )}
 

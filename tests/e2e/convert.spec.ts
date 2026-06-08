@@ -720,6 +720,48 @@ test("bundles selected images into a local PDF without upload", async ({ page })
   await guards.assertClean();
 });
 
+test("creates a searchable OCR PDF from selected images locally without upload", async ({ page }) => {
+  const guards = installPageGuards(page);
+  const writeRequests: string[] = [];
+  page.on("request", (request) => {
+    if (["POST", "PUT", "PATCH"].includes(request.method())) {
+      writeRequests.push(`${request.method()} ${request.url()}`);
+    }
+  });
+  await installConvertedPdfBlobCapture(page);
+  await page.evaluate(() => {
+    const win = window as Window & { __maibachTestOcr?: (file: File) => Promise<string> };
+    win.__maibachTestOcr = async (file) => `LOCAL OCR TEXT ${file.name}`;
+  });
+
+  await page.locator('input[type="file"]').setInputFiles([
+    {
+      name: "scan-one.png",
+      mimeType: "image/png",
+      buffer: PDF_EMBED_SAMPLE_PNG,
+    },
+    {
+      name: "scan-two.png",
+      mimeType: "image/png",
+      buffer: PDF_EMBED_SAMPLE_PNG,
+    },
+  ]);
+
+  await expect(page.getByAltText("scan-one.png")).toBeVisible();
+  await expect(page.getByAltText("scan-two.png")).toBeVisible();
+  await page.getByRole("button", { name: "Bilder (2)" }).click();
+  await page.getByRole("button", { name: "OCR-PDF erstellen" }).click();
+  await expect(page.locator('[title="ocr-2-pages.pdf"]')).toBeVisible();
+
+  const output = await PDFDocument.load(await readLastConvertedPdfBytes(page));
+  expect(output.getPageCount()).toBe(2);
+  expect(output.getTitle()).toBe("Maibach Convert OCR PDF");
+  expect(output.getAuthor()).toBe("Maibach Convert");
+  expect(writeRequests).toEqual([]);
+
+  await guards.assertClean();
+});
+
 test("runs single PDF page tools locally without upload", async ({ page }) => {
   const guards = installPageGuards(page);
   const writeRequests: string[] = [];

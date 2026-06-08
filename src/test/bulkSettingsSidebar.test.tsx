@@ -79,6 +79,7 @@ describe("BulkSettingsSidebar", () => {
 
   it("offers a local image-to-PDF action for selected images", () => {
     const onCreatePdfFromImages = vi.fn();
+    const onCreateSearchablePdfFromImages = vi.fn();
     const onApply = vi.fn();
 
     render(
@@ -89,12 +90,15 @@ describe("BulkSettingsSidebar", () => {
         onApply={onApply}
         onClose={vi.fn()}
         onCreatePdfFromImages={onCreatePdfFromImages}
+        onCreateSearchablePdfFromImages={onCreateSearchablePdfFromImages}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Bilder als PDF bündeln" }));
+    fireEvent.click(screen.getByRole("button", { name: "OCR-PDF erstellen" }));
 
     expect(onCreatePdfFromImages).toHaveBeenCalledTimes(1);
+    expect(onCreateSearchablePdfFromImages).toHaveBeenCalledTimes(1);
     expect(onApply).not.toHaveBeenCalled();
     expect(screen.getByText(/lokal im Browser/i)).toBeInTheDocument();
     expect(screen.getByText("Qualitätseinstellungen")).toBeInTheDocument();
