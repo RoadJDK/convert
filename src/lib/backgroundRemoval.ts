@@ -57,8 +57,34 @@ type BackgroundRemovalWithAssetFallbackInput = {
   onAssetFallback?: (error: Error) => void;
 };
 
-function normalizePublicPath(publicPath: string): string {
+function ensureTrailingSlash(publicPath: string): string {
   return publicPath.endsWith("/") ? publicPath : `${publicPath}/`;
+}
+
+function getBrowserBaseHref(): string | undefined {
+  const locationLike = (globalThis as { location?: { href?: unknown } }).location;
+  return typeof locationLike?.href === "string" ? locationLike.href : undefined;
+}
+
+export function resolveBackgroundRemovalPublicPath(
+  publicPath: string,
+  baseHref = getBrowserBaseHref(),
+): string {
+  const normalizedPublicPath = ensureTrailingSlash(publicPath);
+
+  try {
+    return new URL(normalizedPublicPath).toString();
+  } catch {
+    if (!baseHref) {
+      return normalizedPublicPath;
+    }
+  }
+
+  try {
+    return new URL(normalizedPublicPath, baseHref).toString();
+  } catch {
+    return normalizedPublicPath;
+  }
 }
 
 function normalizeError(error: unknown): Error {
@@ -68,10 +94,10 @@ function normalizeError(error: unknown): Error {
 export function createBackgroundRemovalAssetPlan(
   input: BackgroundRemovalAssetPlanInput = {},
 ): BackgroundRemovalAssetPlan {
-  const selfHostedPublicPath = normalizePublicPath(
+  const selfHostedPublicPath = ensureTrailingSlash(
     input.selfHostedPublicPath ?? BACKGROUND_REMOVAL_SELF_HOSTED_PUBLIC_PATH,
   );
-  const remotePublicPath = normalizePublicPath(
+  const remotePublicPath = ensureTrailingSlash(
     input.remotePublicPath ?? BACKGROUND_REMOVAL_REMOTE_PUBLIC_PATH,
   );
 
@@ -102,7 +128,7 @@ export function createBackgroundRemovalAssetPlan(
 
 export function createBackgroundRemovalConfig(input: CreateBackgroundRemovalConfigInput): BackgroundRemovalConfig {
   return {
-    publicPath: normalizePublicPath(input.publicPath),
+    publicPath: resolveBackgroundRemovalPublicPath(input.publicPath),
     model: input.model ?? "isnet_fp16",
     device: "cpu",
     progress: input.progress,

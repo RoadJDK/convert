@@ -11,9 +11,19 @@ import {
   createBackgroundRemovalAssetPlan,
   createBackgroundRemovalConfig,
   removeImageBackgroundWithAssetFallback,
+  resolveBackgroundRemovalPublicPath,
 } from "@/lib/backgroundRemoval";
 
 describe("background removal asset planning", () => {
+  it("resolves root-relative asset public paths against the browser origin", () => {
+    expect(
+      resolveBackgroundRemovalPublicPath(
+        "/vendor/background-removal/1.7.0/dist",
+        "https://convert.maibach-systems.ch/workspace",
+      ),
+    ).toBe("https://convert.maibach-systems.ch/vendor/background-removal/1.7.0/dist/");
+  });
+
   it("prefers self-hosted model assets when they are installed", () => {
     const plan = createBackgroundRemovalAssetPlan({ localAssetsAvailable: true });
 
@@ -42,7 +52,6 @@ describe("background removal asset planning", () => {
     });
 
     expect(config).toMatchObject({
-      publicPath: "/vendor/background-removal/1.7.0/dist/",
       model: "isnet_fp16",
       device: "cpu",
       output: {
@@ -50,6 +59,10 @@ describe("background removal asset planning", () => {
         quality: 1,
       },
     });
+    expect(() => new URL("resources.json", config.publicPath)).not.toThrow();
+    expect(new URL("resources.json", config.publicPath).pathname).toBe(
+      "/vendor/background-removal/1.7.0/dist/resources.json",
+    );
   });
 
   it("tries self-hosted assets first and falls back to the versioned CDN asset path", async () => {
@@ -69,7 +82,9 @@ describe("background removal asset planning", () => {
     expect(removeBackgroundMock).toHaveBeenNthCalledWith(
       1,
       input,
-      expect.objectContaining({ publicPath: "/vendor/background-removal/1.7.0/dist/" }),
+      expect.objectContaining({
+        publicPath: expect.stringContaining("/vendor/background-removal/1.7.0/dist/"),
+      }),
     );
     expect(removeBackgroundMock).toHaveBeenNthCalledWith(
       2,
