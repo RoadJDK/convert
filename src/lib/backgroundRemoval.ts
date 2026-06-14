@@ -1,4 +1,5 @@
 import { removeBackground } from "@imgly/background-removal";
+import { canvasToBrowserPngBlob, createEncodingCanvas, refineBackgroundRemovalAlpha } from "@/lib/imageEncoding";
 
 type BackgroundRemovalProgress = (key: string, current: number, total: number) => void;
 
@@ -141,6 +142,67 @@ export function createBackgroundRemovalConfig(input: CreateBackgroundRemovalConf
 
 export async function removeImageBackground(input: File | Blob, config: BackgroundRemovalConfig): Promise<Blob> {
   return removeBackground(input, config);
+}
+
+export function applyAlphaMaskToImageData(source: ImageData, mask: ImageData): ImageData {
+  if (source.width !== mask.width || source.height !== mask.height) {
+    throw new Error("Source image and background mask dimensions do not match");
+  }
+
+  const output = new ImageData(new Uint8ClampedArray(source.data), source.width, source.height);
+
+  for (let offset = 0; offset < output.data.length; offset += 4) {
+    output.data[offset + 3] = mask.data[offset + 3];
+  }
+
+  return output;
+}
+
+async function loadImageBitmap(blob: Blob): Promise<ImageBitmap> {
+  if (typeof createImageBitmap === "undefined") {
+    throw new Error("Image bitmap loading is unavailable in this browser");
+  }
+
+  return createImageBitmap(blob);
+}
+
+export async function composeBackgroundRemovalMaskWithOriginal(
+  original: Blob,
+  backgroundRemoved: Blob,
+): Promise<Blob> {
+  const [originalBitmap, maskBitmap] = await Promise.all([
+    loadImageBitmap(original),
+    loadImageBitmap(backgroundRemoved),
+  ]);
+
+  try {
+    const width = maskBitmap.width;
+    const height = maskBitmap.height;
+    const source = createEncodingCanvas(width, height, {
+      preferOffscreen: true,
+      willReadFrequently: true,
+    });
+    const mask = createEncodingCanvas(width, height, {
+      preferOffscreen: true,
+      willReadFrequently: true,
+    });
+
+    source.context.drawImage(originalBitmap, 0, 0, width, height);
+    mask.context.drawImage(maskBitmap, 0, 0, width, height);
+
+    const composed = applyAlphaMaskToImageData(
+      source.context.getImageData(0, 0, width, height),
+      mask.context.getImageData(0, 0, width, height),
+    );
+
+    source.context.putImageData(composed, 0, 0);
+    refineBackgroundRemovalAlpha(source.canvas);
+
+    return canvasToBrowserPngBlob(source.canvas);
+  } finally {
+    originalBitmap.close();
+    maskBitmap.close();
+  }
 }
 
 export async function removeImageBackgroundWithAssetFallback(

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -28,11 +28,30 @@ function run(command, args, options = {}) {
 
 function verifyInstalled() {
   const resourcesFile = join(destinationDir, "resources.json");
-  const modelsDir = join(destinationDir, "models");
-  const onnxDir = join(destinationDir, "onnxruntime-web");
 
-  if (!existsSync(resourcesFile) || !existsSync(modelsDir) || !existsSync(onnxDir)) {
+  if (!existsSync(resourcesFile)) {
     throw new Error(`Background-removal assets are incomplete at ${destinationDir}`);
+  }
+
+  const resources = JSON.parse(readFileSync(resourcesFile, "utf8"));
+  const requiredResources = [
+    "/models/isnet",
+    "/models/isnet_fp16",
+    "/models/isnet_quint8",
+    "/onnxruntime-web/ort-wasm-simd-threaded.wasm",
+    "/onnxruntime-web/ort-wasm-simd-threaded.mjs",
+  ];
+
+  for (const resource of requiredResources) {
+    if (!resources[resource]?.chunks?.length) {
+      throw new Error(`Background-removal resource ${resource} is missing in ${resourcesFile}`);
+    }
+
+    for (const chunk of resources[resource].chunks) {
+      if (!chunk.name || !existsSync(join(destinationDir, chunk.name))) {
+        throw new Error(`Background-removal chunk for ${resource} is missing at ${destinationDir}`);
+      }
+    }
   }
 
   console.log(`Background-removal assets installed at ${destinationDir}`);

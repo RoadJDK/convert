@@ -17,7 +17,10 @@ import { useImageConverter } from './useImageConverter';
 import { useVideoConverter } from './useVideoConverter';
 import { useStatsTracker } from './useStatsTracker';
 import { useRateLimiter } from './useRateLimiter';
-import { removeImageBackgroundWithAssetFallback } from '@/lib/backgroundRemoval';
+import {
+  composeBackgroundRemovalMaskWithOriginal,
+  removeImageBackgroundWithAssetFallback,
+} from '@/lib/backgroundRemoval';
 import { shouldExtractVideoPreview } from '@/lib/videoPreviewState';
 import { stripPdfMetadata } from '@/lib/pdfOperations';
 
@@ -155,7 +158,7 @@ export const useFileConverter = () => {
         if (fileItem.type === 'image' && fileItem.removeBackground) {
           updateFile(fileItem.id, { progress: 5 });
           
-          const bgBlob = await removeImageBackgroundWithAssetFallback(fileToConvert, {
+          const bgMaskBlob = await removeImageBackgroundWithAssetFallback(fileToConvert, {
             progress: (_key: string, current: number, total: number) => {
               const bgProgress = Math.round((current / total) * 40); // 0-40% for BG removal
               updateFile(fileItem.id, { progress: 5 + bgProgress });
@@ -164,6 +167,7 @@ export const useFileConverter = () => {
               console.warn('Self-hosted background removal assets unavailable; using versioned remote assets.', error);
             },
           });
+          const bgBlob = await composeBackgroundRemovalMaskWithOriginal(fileToConvert, bgMaskBlob);
           fileToConvert = new File([bgBlob], fileItem.file.name, { type: 'image/png' });
         }
 

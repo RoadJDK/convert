@@ -9,6 +9,7 @@ import {
   displayedToJpegQuality,
   displayedToPngScale,
   displayedToWebpQuality,
+  refineBackgroundRemovalAlpha,
   scaleCanvas,
 } from "@/lib/imageEncoding";
 import { applyWatermarkCleanup } from "@/lib/watermarkCleanup";
@@ -27,6 +28,7 @@ interface ConversionOptions {
   cleanupMask?: CleanupMask;
   dimensions?: { width: number; height: number };
   addWhiteBackground?: boolean;
+  cleanTransparentEdges?: boolean;
   removeWatermark?: boolean;
 }
 
@@ -46,7 +48,16 @@ export const useImageConverter = () => {
         img.onload = async () => {
           onProgress(40);
 
-          const { qualitySettings, cropArea, cleanupArea, cleanupMask, dimensions, addWhiteBackground, removeWatermark } = options;
+          const {
+            qualitySettings,
+            cropArea,
+            cleanupArea,
+            cleanupMask,
+            dimensions,
+            addWhiteBackground,
+            cleanTransparentEdges,
+            removeWatermark,
+          } = options;
           const outputFormat = (qualitySettings.outputFormat as ImageOutputFormat) || "webp";
           const sourceDimensions = {
             width: img.naturalWidth || img.width,
@@ -65,7 +76,7 @@ export const useImageConverter = () => {
           // Create base canvas at target dimensions
           const { canvas, context: ctx } = createEncodingCanvas(target.width, target.height, {
             preferOffscreen: outputFormat !== "svg",
-            willReadFrequently: Boolean(removeWatermark),
+            willReadFrequently: Boolean(removeWatermark || cleanTransparentEdges),
           });
 
           ctx.imageSmoothingEnabled = true;
@@ -92,6 +103,9 @@ export const useImageConverter = () => {
                 sourceSize: sourceDimensions,
               }),
             );
+          }
+          if (cleanTransparentEdges && !addWhiteBackground) {
+            refineBackgroundRemovalAlpha(canvas);
           }
           onProgress(60);
 

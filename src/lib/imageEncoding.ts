@@ -217,6 +217,10 @@ const canvasToPngBuffer = (canvas: EncodingCanvas): Promise<ArrayBuffer> => {
   return canvasToBlobByBrowser(canvas, "image/png").then((blob) => blob.arrayBuffer());
 };
 
+export const canvasToBrowserPngBlob = (canvas: EncodingCanvas): Promise<Blob> => {
+  return canvasToBlobByBrowser(canvas, "image/png");
+};
+
 const canvasToSvgBlob = (canvas: EncodingCanvas): Blob => {
   if (!("toDataURL" in canvas)) {
     throw new Error("SVG export requires a DOM canvas");
@@ -306,6 +310,144 @@ export const scaleCanvas = (sourceCanvas: EncodingCanvas, scaleFactor: number): 
   ctx.drawImage(sourceCanvas, 0, 0, newCanvas.width, newCanvas.height);
 
   return newCanvas;
+};
+
+export const cleanLowAlphaPixels = (canvas: EncodingCanvas, alphaThreshold: number = 12): void => {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get canvas context");
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const { data } = imageData;
+  const threshold = Math.max(0, Math.min(255, Math.round(alphaThreshold)));
+
+  for (let offset = 0; offset < data.length; offset += 4) {
+    if (data[offset + 3] > 0 && data[offset + 3] <= threshold) {
+      data[offset] = 0;
+      data[offset + 1] = 0;
+      data[offset + 2] = 0;
+      data[offset + 3] = 0;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+};
+
+const getLuminance = (data: Uint8ClampedArray, offset: number): number => {
+  return (data[offset] + data[offset + 1] + data[offset + 2]) / 3;
+};
+
+const shouldRestoreBrightLowAlphaPixel = (
+  data: Uint8ClampedArray,
+  pixelIndex: number,
+  alphaMax: number,
+  luminanceMin: number,
+): boolean => {
+  const offset = pixelIndex * 4;
+  return data[offset + 3] <= alphaMax && getLuminance(data, offset) >= luminanceMin;
+};
+
+export const refineBackgroundRemovalAlpha = (canvas: EncodingCanvas): void => {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get canvas context");
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const { data } = imageData;
+  const width = canvas.width;
+  const height = canvas.height;
+  const totalPixels = width * height;
+
+  const lowAlphaThreshold = 12;
+  const alphaCurveMin = 16;
+  const alphaCurvePower = 0.35;
+  const restoreAlphaMax = 48;
+  const restoreLuminanceMin = 40;
+  const restoreRatioGate = 0.08;
+  const restoreTouchAlpha = 64;
+  const restoreMinComponentPixels = 500;
+
+  const restoreCandidates = new Uint8Array(totalPixels);
+  let restoreCandidateCount = 0;
+
+  for (let pixel = 0; pixel < totalPixels; pixel += 1) {
+    if (shouldRestoreBrightLowAlphaPixel(data, pixel, restoreAlphaMax, restoreLuminanceMin)) {
+      restoreCandidates[pixel] = 1;
+      restoreCandidateCount += 1;
+    }
+  }
+
+  if (restoreCandidateCount / totalPixels >= restoreRatioGate) {
+    const seen = new Uint8Array(totalPixels);
+    const queue = new Int32Array(totalPixels);
+    const component: number[] = [];
+
+    for (let start = 0; start < totalPixels; start += 1) {
+      if (!restoreCandidates[start] || seen[start]) continue;
+
+      component.length = 0;
+      let head = 0;
+      let tail = 0;
+      let touchesBorder = false;
+      let touchesForeground = false;
+
+      queue[tail] = start;
+      tail += 1;
+      seen[start] = 1;
+
+      const enqueueNeighbor = (neighbor: number) => {
+        if (data[neighbor * 4 + 3] > restoreTouchAlpha) {
+          touchesForeground = true;
+        }
+
+        if (restoreCandidates[neighbor] && !seen[neighbor]) {
+          seen[neighbor] = 1;
+          queue[tail] = neighbor;
+          tail += 1;
+        }
+      };
+
+      while (head < tail) {
+        const pixel = queue[head];
+        head += 1;
+        component.push(pixel);
+
+        const x = pixel % width;
+        const y = Math.floor(pixel / width);
+        if (x === 0 || y === 0 || x === width - 1 || y === height - 1) {
+          touchesBorder = true;
+        }
+
+        if (x > 0) enqueueNeighbor(pixel - 1);
+        if (x < width - 1) enqueueNeighbor(pixel + 1);
+        if (y > 0) enqueueNeighbor(pixel - width);
+        if (y < height - 1) enqueueNeighbor(pixel + width);
+      }
+
+      if (!touchesBorder && (touchesForeground || component.length >= restoreMinComponentPixels)) {
+        for (const pixel of component) {
+          data[pixel * 4 + 3] = 255;
+        }
+      }
+    }
+  }
+
+  for (let offset = 0; offset < data.length; offset += 4) {
+    const alpha = data[offset + 3];
+
+    if (alpha > 0 && alpha <= lowAlphaThreshold) {
+      data[offset] = 0;
+      data[offset + 1] = 0;
+      data[offset + 2] = 0;
+      data[offset + 3] = 0;
+      continue;
+    }
+
+    if (alpha >= alphaCurveMin) {
+      const curvedAlpha = Math.round(255 * Math.pow(alpha / 255, alphaCurvePower));
+      data[offset + 3] = Math.max(alpha, Math.min(255, curvedAlpha));
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
 };
 
 export const canvasToBlobWithFormat = async (

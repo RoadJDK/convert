@@ -10,9 +10,11 @@ vi.mock("@/lib/jsquash", () => jsquashMock);
 
 import {
   canvasToBlobWithFormat,
+  cleanLowAlphaPixels,
   compressLossyToMaxSize,
   createEncodingCanvas,
   getImageCodecAdapter,
+  refineBackgroundRemovalAlpha,
 } from "@/lib/imageEncoding";
 
 describe("image encoding", () => {
@@ -104,6 +106,105 @@ describe("image encoding", () => {
 
     expect(jsquashMock.encodeWebpWasm).toHaveBeenCalledWith(imageData, 80);
     expect(blob.type).toBe("image/webp");
+  });
+
+  it("clears tiny non-zero alpha pixels left by cutout masks", () => {
+    const imageData = {
+      data: new Uint8ClampedArray([
+        255, 255, 255, 0,
+        255, 255, 255, 3,
+        255, 255, 255, 12,
+        255, 255, 255, 13,
+        12, 34, 56, 255,
+      ]),
+      colorSpace: "srgb",
+      height: 1,
+      width: 5,
+    } as ImageData;
+    const putImageData = vi.fn();
+    const canvas = {
+      width: 5,
+      height: 1,
+      getContext: vi.fn(() => ({
+        getImageData: vi.fn(() => imageData),
+        putImageData,
+      })),
+    } as unknown as HTMLCanvasElement;
+
+    cleanLowAlphaPixels(canvas, 12);
+
+    expect(Array.from(imageData.data)).toEqual([
+      255, 255, 255, 0,
+      0, 0, 0, 0,
+      0, 0, 0, 0,
+      255, 255, 255, 13,
+      12, 34, 56, 255,
+    ]);
+    expect(putImageData).toHaveBeenCalledWith(imageData, 0, 0);
+  });
+
+  it("strengthens soft foreground alpha after background removal", () => {
+    const imageData = {
+      data: new Uint8ClampedArray([
+        20, 20, 20, 0,
+        180, 180, 180, 64,
+        240, 240, 240, 12,
+      ]),
+      colorSpace: "srgb",
+      height: 1,
+      width: 3,
+    } as ImageData;
+    const putImageData = vi.fn();
+    const canvas = {
+      width: 3,
+      height: 1,
+      getContext: vi.fn(() => ({
+        getImageData: vi.fn(() => imageData),
+        putImageData,
+      })),
+    } as unknown as HTMLCanvasElement;
+
+    refineBackgroundRemovalAlpha(canvas);
+
+    expect(imageData.data[3]).toBe(0);
+    expect(imageData.data[7]).toBeGreaterThan(128);
+    expect(Array.from(imageData.data.slice(8, 12))).toEqual([0, 0, 0, 0]);
+    expect(putImageData).toHaveBeenCalledWith(imageData, 0, 0);
+  });
+
+  it("restores bright low-alpha components when the cutout mask has product holes", () => {
+    const pixels = Array.from({ length: 25 }, () => [0, 0, 0, 0]).flat();
+    const setPixel = (index: number, rgba: [number, number, number, number]) => {
+      pixels.splice(index * 4, 4, ...rgba);
+    };
+    setPixel(12, [120, 120, 120, 96]);
+    setPixel(7, [180, 180, 180, 0]);
+    setPixel(11, [178, 178, 178, 4]);
+    setPixel(13, [176, 176, 176, 8]);
+    setPixel(17, [174, 174, 174, 12]);
+    const imageData = {
+      data: new Uint8ClampedArray(pixels),
+      colorSpace: "srgb",
+      height: 5,
+      width: 5,
+    } as ImageData;
+    const putImageData = vi.fn();
+    const canvas = {
+      width: 5,
+      height: 5,
+      getContext: vi.fn(() => ({
+        getImageData: vi.fn(() => imageData),
+        putImageData,
+      })),
+    } as unknown as HTMLCanvasElement;
+
+    refineBackgroundRemovalAlpha(canvas);
+
+    expect(imageData.data[7 * 4 + 3]).toBe(255);
+    expect(imageData.data[11 * 4 + 3]).toBe(255);
+    expect(imageData.data[13 * 4 + 3]).toBe(255);
+    expect(imageData.data[17 * 4 + 3]).toBe(255);
+    expect(putImageData).toHaveBeenCalledWith(imageData, 0, 0);
   });
 
   it("scales JPEG dimensions when browser quality alone cannot meet max size", async () => {
