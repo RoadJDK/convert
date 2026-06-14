@@ -11,6 +11,36 @@ type CodecEncodeOptions = {
   oxipngLevel: number;
 };
 
+type ImageEncodeWorkerRequest =
+  | {
+      id: number;
+      type: "encode-image-data";
+      format: "webp" | "avif";
+      imageData: ImageData;
+      quality: number;
+    }
+  | {
+      id: number;
+      type: "optimise-png";
+      pngBuffer: ArrayBuffer;
+      level: number;
+    };
+
+type ImageEncodeWorkerResponse =
+  | {
+      id: number;
+      ok: true;
+      buffer: ArrayBuffer;
+    }
+  | {
+      id: number;
+      ok: false;
+      error: string;
+    };
+
+type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never;
+type ImageEncodeWorkerPayload = DistributiveOmit<ImageEncodeWorkerRequest, "id">;
+
 export type ImageCodecAdapter = {
   id: "jsquash-webp" | "jsquash-avif" | "jsquash-png" | "browser-canvas" | "svg-data-url";
   encode: (canvas: EncodingCanvas, options: CodecEncodeOptions) => Promise<Blob>;
@@ -20,6 +50,68 @@ export type EncodingCanvasResource = {
   backend: EncodingBackend;
   canvas: EncodingCanvas;
   context: EncodingContext2D;
+};
+
+let imageEncodeWorker: Worker | null = null;
+let imageEncodeWorkerRequestId = 0;
+const imageEncodeWorkerRequests = new Map<
+  number,
+  {
+    reject: (error: Error) => void;
+    resolve: (buffer: ArrayBuffer) => void;
+  }
+>();
+
+const rejectPendingWorkerRequests = (error: Error) => {
+  imageEncodeWorkerRequests.forEach(({ reject }) => reject(error));
+  imageEncodeWorkerRequests.clear();
+};
+
+const getImageEncodeWorker = (): Worker => {
+  if (imageEncodeWorker) return imageEncodeWorker;
+
+  imageEncodeWorker = new Worker(new URL("../workers/imageEncode.worker.ts", import.meta.url), {
+    type: "module",
+  });
+
+  imageEncodeWorker.onmessage = (event: MessageEvent<ImageEncodeWorkerResponse>) => {
+    const response = event.data;
+    const request = imageEncodeWorkerRequests.get(response.id);
+    if (!request) return;
+
+    imageEncodeWorkerRequests.delete(response.id);
+
+    if ("buffer" in response) {
+      request.resolve(response.buffer);
+    } else {
+      request.reject(new Error(response.error));
+    }
+  };
+
+  imageEncodeWorker.onerror = () => {
+    const error = new Error("Image encode worker failed");
+    rejectPendingWorkerRequests(error);
+    imageEncodeWorker?.terminate();
+    imageEncodeWorker = null;
+  };
+
+  return imageEncodeWorker;
+};
+
+const runImageEncodeWorker = (
+  request: ImageEncodeWorkerPayload,
+): Promise<ArrayBuffer> => {
+  if (typeof Worker === "undefined") {
+    return Promise.reject(new Error("Image encode worker unavailable"));
+  }
+
+  const id = imageEncodeWorkerRequestId + 1;
+  imageEncodeWorkerRequestId = id;
+
+  return new Promise((resolve, reject) => {
+    imageEncodeWorkerRequests.set(id, { resolve, reject });
+    getImageEncodeWorker().postMessage({ ...request, id });
+  });
 };
 
 export const createEncodingCanvas = (
@@ -57,7 +149,12 @@ const canvasToWebpViaWasm = async (
   quality: number,
 ): Promise<Blob> => {
   const imageData = getImageData(canvas);
-  const webpBuffer = await encodeWebpWasm(imageData, quality);
+  const webpBuffer = await runImageEncodeWorker({
+    type: "encode-image-data",
+    format: "webp",
+    imageData,
+    quality,
+  }).catch(() => encodeWebpWasm(imageData, quality));
   return new Blob([webpBuffer], { type: "image/webp" });
 };
 
@@ -66,16 +163,29 @@ const canvasToAvifViaWasm = async (
   quality: number,
 ): Promise<Blob> => {
   const imageData = getImageData(canvas);
-  const avifBuffer = await encodeAvifWasm(imageData, quality);
+  const avifBuffer = await runImageEncodeWorker({
+    type: "encode-image-data",
+    format: "avif",
+    imageData,
+    quality,
+  }).catch(() => encodeAvifWasm(imageData, quality));
   return new Blob([avifBuffer], { type: "image/avif" });
 };
 
 const optimisePngBuffer = async (pngBuffer: ArrayBuffer, level: number = 2): Promise<ArrayBuffer> => {
   try {
-    return await optimisePngWasm(pngBuffer, level);
+    return await runImageEncodeWorker({
+      type: "optimise-png",
+      pngBuffer,
+      level,
+    });
   } catch (error) {
-    console.warn("[ImageConverter] OxiPNG optimization failed, using original:", error);
-    return pngBuffer;
+    try {
+      return await optimisePngWasm(pngBuffer, level);
+    } catch (fallbackError) {
+      console.warn("[ImageConverter] OxiPNG optimization failed, using original:", fallbackError);
+      return pngBuffer;
+    }
   }
 };
 

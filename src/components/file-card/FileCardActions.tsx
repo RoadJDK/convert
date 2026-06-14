@@ -28,6 +28,8 @@ type FileCardActionsProps = {
   onConvert: () => void;
   onCropClick: () => void;
   onDownload: () => void;
+  downloadHref?: string;
+  downloadName?: string;
   onRemove: () => void;
   onReset?: () => void;
   onSettingsChange: (settings: QualitySettings) => void;
@@ -49,6 +51,8 @@ export function FileCardActions({
   onConvert,
   onCropClick,
   onDownload,
+  downloadHref,
+  downloadName,
   onRemove,
   onReset,
   onSettingsChange,
@@ -181,15 +185,29 @@ export function FileCardActions({
               <ResetFrameIcon className="h-4 w-4" />
             </Button>
           )}
-          <Button
-            size="sm"
-            onClick={onDownload}
-            aria-label="Download"
-            className="h-11 min-w-11 gap-1 bg-success text-success-foreground hover:bg-success/90 sm:h-9 sm:gap-2"
-          >
-            <DownloadTrayIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Download</span>
-          </Button>
+          {downloadHref ? (
+            <Button
+              asChild
+              size="sm"
+              aria-label="Download"
+              className="h-11 min-w-11 gap-1 bg-success text-success-foreground hover:bg-success/90 sm:h-9 sm:gap-2"
+            >
+              <a href={downloadHref} download={downloadName}>
+                <DownloadTrayIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">Download</span>
+              </a>
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={onDownload}
+              aria-label="Download"
+              className="h-11 min-w-11 gap-1 bg-success text-success-foreground hover:bg-success/90 sm:h-9 sm:gap-2"
+            >
+              <DownloadTrayIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">Download</span>
+            </Button>
+          )}
           {renderRemoveButton()}
         </div>
       )}

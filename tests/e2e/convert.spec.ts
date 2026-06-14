@@ -105,6 +105,8 @@ const installPageGuards = (page: Page) => {
   };
 };
 
+const getDownloadControl = (page: Page) => page.getByRole("link", { name: "Download", exact: true });
+
 const expectFileCardActionsToFit = async (page: Page) => {
   const metrics = await page.getByTestId("file-card-actions").first().evaluate((actions) => {
     const viewportWidth = window.innerWidth;
@@ -656,10 +658,67 @@ test("converts an image locally and records local stats", async ({ page }) => {
 
   await expect(page.getByAltText("e2e-sample.png")).toBeVisible();
   await page.getByRole("button", { name: /^Start$/ }).click();
-  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  await expect(getDownloadControl(page)).toBeVisible();
 
   const stats = await page.evaluate(() => localStorage.getItem("maibach_convert_stats"));
   expect(stats).toContain('"imagesConverted":1');
+
+  await guards.assertClean();
+});
+
+test("downloads a converted image from the file card link", async ({ page }) => {
+  const guards = installPageGuards(page);
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "single-download.png",
+    mimeType: "image/png",
+    buffer: SAMPLE_PNG,
+  });
+
+  await expect(page.getByAltText("single-download.png")).toBeVisible();
+  await page.getByRole("button", { name: /^Start$/ }).click();
+
+  const downloadButton = getDownloadControl(page);
+  await expect(downloadButton).toHaveAttribute("download", "single-download.webp");
+  const downloadPromise = page.waitForEvent("download");
+  await downloadButton.click();
+  const download = await downloadPromise;
+
+  expect(download.suggestedFilename()).toBe("single-download.webp");
+  expect(await download.failure()).toBeNull();
+
+  await guards.assertClean();
+});
+
+test("downloads completed images as a ZIP archive", async ({ page }) => {
+  const guards = installPageGuards(page);
+
+  await page.locator('input[type="file"]').setInputFiles([
+    {
+      name: "zip-one.png",
+      mimeType: "image/png",
+      buffer: SAMPLE_PNG,
+    },
+    {
+      name: "zip-two.png",
+      mimeType: "image/png",
+      buffer: SAMPLE_PNG,
+    },
+  ]);
+
+  await expect(page.getByAltText("zip-one.png")).toBeVisible();
+  await expect(page.getByAltText("zip-two.png")).toBeVisible();
+  await page.getByRole("button", { name: "Alle starten (2)" }).click();
+  await expect(page.locator('[title="zip-one.webp"]')).toBeVisible();
+  await expect(page.locator('[title="zip-two.webp"]')).toBeVisible();
+
+  await page.getByRole("button", { name: /(?:Alle downloaden|Download).*2/ }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("menuitem", { name: "Als ZIP-Archiv" }).click();
+  const download = await downloadPromise;
+
+  expect(download.suggestedFilename()).toMatch(/^maibach-convert-\d{4}-\d{2}-\d{2}\.zip$/);
+  expect(await download.failure()).toBeNull();
 
   await guards.assertClean();
 });
@@ -693,7 +752,7 @@ test("merges selected PDFs locally without upload", async ({ page }) => {
   await expect(page.getByText(/Zusammenführen läuft lokal im Browser/i)).toBeVisible();
   await page.getByRole("button", { name: "PDFs zusammenführen" }).click();
   await expect(page.locator('[title="merged-2-pdfs.pdf"]')).toBeVisible();
-  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  await expect(getDownloadControl(page)).toBeVisible();
 
   const output = await PDFDocument.load(await readLastConvertedPdfBytes(page));
   expect(output.getPageCount()).toBe(3);
@@ -930,7 +989,7 @@ test("converts PNG input to supported raster image outputs with decodable dimens
     }
 
     await page.getByRole("button", { name: /^Start$/ }).click();
-    await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+    await expect(getDownloadControl(page)).toBeVisible();
 
     const metadata = await page.evaluate(async (expectedType) => {
       const blobs = ((window as Window & { __convertedBlobs?: Blob[] }).__convertedBlobs ?? []).filter(
@@ -1005,7 +1064,7 @@ test("applies the image watermark cleanup option", async ({ page }) => {
   await expect(page.getByText(/Bereinigungsbereich/)).toBeVisible();
 
   await page.getByRole("button", { name: /^Start$/ }).click();
-  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  await expect(getDownloadControl(page)).toBeVisible();
 
   const cleanedPixel = await page.evaluate(async () => {
     const win = window as Window & { __convertedBlobs?: Blob[] };
@@ -1083,7 +1142,7 @@ test("applies a freehand image cleanup mask", async ({ page }) => {
   await expect(page.getByText(/Freihandmaske/)).toBeVisible();
 
   await page.getByRole("button", { name: /^Start$/ }).click();
-  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  await expect(getDownloadControl(page)).toBeVisible();
 
   const cleanedPixel = await page.evaluate(async () => {
     const win = window as Window & { __convertedBlobs?: Blob[] };
@@ -1200,7 +1259,7 @@ test("resizes a video through the WebCodecs path without crop or trim fallback",
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: /^Start$/ }).click();
-  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  await expect(getDownloadControl(page)).toBeVisible();
 
   const metadata = await readLastConvertedVideoMetadata(page);
 
@@ -1235,7 +1294,7 @@ test("applies video cleanup through the degraded frame-render path", async ({ pa
   await expect(page.getByText(/Bereinigungsbereich/)).toBeVisible();
 
   await page.getByRole("button", { name: /^Start$/ }).click();
-  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  await expect(getDownloadControl(page)).toBeVisible();
 
   const metadata = await readLastConvertedVideoMetadata(page);
   expect(metadata.type).toBe("video/webm");
@@ -1290,7 +1349,7 @@ test("applies video crop and trim through the Mediabunny edit path", async ({ pa
 
   await page.getByRole("button", { name: "Anwenden" }).click();
   await page.getByRole("button", { name: /^Start$/ }).click();
-  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  await expect(getDownloadControl(page)).toBeVisible();
 
   const metadata = await readLastConvertedVideoMetadata(page);
   expect(metadata.type).toBe("video/webm");
@@ -1344,7 +1403,7 @@ test("preserves an audio track through the Mediabunny crop and trim path", async
 
   await page.getByRole("button", { name: "Anwenden" }).click();
   await page.getByRole("button", { name: /^Start$/ }).click();
-  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  await expect(getDownloadControl(page)).toBeVisible();
 
   const outputInspection = await inspectVideoContainer(await readLastConvertedVideoBytes(page));
   expect(outputInspection.videoTrackCount).toBe(1);
@@ -1385,7 +1444,7 @@ test("writes edited video to MP4 through the Mediabunny path", async ({ page }, 
 
   await page.getByRole("button", { name: "Anwenden" }).click();
   await page.getByRole("button", { name: /^Start$/ }).click();
-  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  await expect(getDownloadControl(page)).toBeVisible();
 
   const metadata = await readLastConvertedVideoMetadata(page);
   expect(metadata.type).toBe("video/mp4");
@@ -1440,7 +1499,7 @@ test("falls back cleanly for MP4 input when WebCodecs cannot decode the source",
 
   await page.getByRole("button", { name: "Anwenden" }).click();
   await page.getByRole("button", { name: /^Start$/ }).click();
-  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  await expect(getDownloadControl(page)).toBeVisible();
 
   const metadata = await readLastConvertedVideoMetadata(page);
   expect(metadata.type).toBe("video/webm");
@@ -1486,7 +1545,7 @@ test("rotates edited video through the Mediabunny path", async ({ page }, testIn
   await page.getByRole("button", { name: "Anwenden" }).click();
   await expect(page.getByText("Gedreht")).toBeVisible();
   await page.getByRole("button", { name: /^Start$/ }).click();
-  await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  await expect(getDownloadControl(page)).toBeVisible();
 
   const metadata = await readLastConvertedVideoMetadata(page);
   expect(metadata.type).toBe("video/webm");

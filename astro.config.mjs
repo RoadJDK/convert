@@ -35,5 +35,8 @@ export default defineConfig({
         "onnxruntime-web",
       ],
     },
+    worker: {
+      format: "es",
+    },
   },
 });

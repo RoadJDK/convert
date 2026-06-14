@@ -23,7 +23,7 @@ import {
   type PdfRotationDegrees,
 } from '@/lib/pdfOperations';
 
-const LOCAL_CONVERSION_CONCURRENCY = 2;
+const LOCAL_CONVERSION_CONCURRENCY = 1;
 
 const getPdfBaseName = (file: ConvertibleFile): string => {
   return (file.suggestedName || file.originalName.replace(/\.[^/.]+$/, '')).trim() || 'document';

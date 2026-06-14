@@ -52,7 +52,7 @@ export const DownloadDropdown = ({ files, onDownloadIndividual }: DownloadDropdo
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (error) {
       console.error('Error creating ZIP:', error);
     } finally {

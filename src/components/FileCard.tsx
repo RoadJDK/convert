@@ -191,6 +191,8 @@ export const FileCard = ({
           onAIRename={onAIRename}
           onConvert={onConvert}
           onCropClick={onCropClick}
+          downloadHref={file.status === "completed" ? file.convertedUrl : undefined}
+          downloadName={file.status === "completed" ? getDisplayName() : undefined}
           onDownload={() => onDownload()}
           onRemove={onRemove}
           onReset={onReset}
