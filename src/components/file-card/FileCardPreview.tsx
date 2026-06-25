@@ -9,10 +9,10 @@ type FileCardPreviewProps = {
 
 export function FileCardPreview({ file, previewUrl }: FileCardPreviewProps) {
   const typeClass = file.type === "image"
-    ? "bg-primary/15"
+    ? "bg-[var(--ms-accent-tint)]"
     : file.type === "video"
-      ? "bg-accent/15"
-      : "bg-primary/10";
+      ? "bg-[var(--ms-accent-tint)]"
+      : "bg-[var(--ms-cream)]";
   const iconClass = file.type === "image"
     ? "bg-primary text-primary-foreground"
     : file.type === "video"
@@ -24,7 +24,7 @@ export function FileCardPreview({ file, previewUrl }: FileCardPreviewProps) {
     <div className="relative shrink-0">
       <div
         className={cn(
-          "relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg sm:h-12 sm:w-12",
+          "relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[var(--ms-radius-card-small)] border border-border sm:h-16 sm:w-16",
           typeClass,
         )}
         data-testid="file-card-preview"
@@ -32,7 +32,7 @@ export function FileCardPreview({ file, previewUrl }: FileCardPreviewProps) {
         {previewUrl && <img src={previewUrl} alt={file.originalName} className="h-full w-full object-cover" />}
         <div
           className={cn(
-            "absolute left-1/2 top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-md border border-background/70 shadow-sm sm:h-7 sm:w-7",
+            "absolute left-1/2 top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-md border border-background/70 shadow-sm",
             iconClass,
           )}
           data-testid="file-card-preview-type-icon"

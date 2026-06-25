@@ -49,7 +49,7 @@ describe("createWatermarkCleanupPlan", () => {
       preservesOriginal: true,
       requiresAuthorization: true,
       tier: "local-inpaint",
-      uiLabel: "Watermark bereinigen",
+      uiLabel: "Logo oder Textstelle bereinigen",
     });
   });
 

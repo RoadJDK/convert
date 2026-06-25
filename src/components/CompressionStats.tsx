@@ -12,10 +12,10 @@ export const CompressionStats = ({ originalSize, convertedSize }: CompressionSta
   
   return (
     <div className={cn(
-      'inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium',
+      'inline-flex items-center gap-1.5 rounded-[var(--ms-radius-chip)] border px-2 py-1 text-xs font-medium',
       isSmaller 
-        ? 'bg-success/20 text-success' 
-        : 'bg-destructive/20 text-destructive'
+        ? 'border-border bg-card text-foreground' 
+        : 'border-destructive/30 bg-card text-destructive'
     )}>
       {isSmaller ? (
         <DirectionDownIcon className="h-3 w-3" />
@@ -24,7 +24,7 @@ export const CompressionStats = ({ originalSize, convertedSize }: CompressionSta
       )}
       <span>{percentage.toFixed(1)}%</span>
       <span className="text-muted-foreground">
-        ({formatFileSize(originalSize)} → {formatFileSize(convertedSize)})
+        ({formatFileSize(originalSize)} zu {formatFileSize(convertedSize)})
       </span>
     </div>
   );

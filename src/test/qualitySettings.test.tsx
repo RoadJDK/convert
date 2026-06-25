@@ -7,6 +7,8 @@ import { DEFAULT_QUALITY_SETTINGS } from "@/types/converter";
 describe("QualitySettings", () => {
   it("labels removal controls with local authorization and limitation copy", async () => {
     const onCleanupAreaClick = vi.fn();
+    const onRemoveBackgroundChange = vi.fn();
+    const onRemoveWatermarkChange = vi.fn();
 
     render(
       <QualitySettings
@@ -14,19 +16,24 @@ describe("QualitySettings", () => {
         onChange={vi.fn()}
         fileType="image"
         removeBackground={false}
-        onRemoveBackgroundChange={vi.fn()}
+        onRemoveBackgroundChange={onRemoveBackgroundChange}
         removeWatermark={false}
-        onRemoveWatermarkChange={vi.fn()}
+        onRemoveWatermarkChange={onRemoveWatermarkChange}
         onCleanupAreaClick={onCleanupAreaClick}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Qualitätseinstellungen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Grösse und Qualität" }));
 
     expect(await screen.findByLabelText("Hintergrund lokal entfernen")).toBeInTheDocument();
-    expect(screen.getByLabelText("Watermark bereinigen")).toBeInTheDocument();
+    expect(screen.getByLabelText("Logo oder Textstelle bereinigen")).toBeInTheDocument();
     expect(screen.getByText(/Nur für eigene Bilder/i)).toBeInTheDocument();
     expect(screen.getByText(/keine vollständige Entfernungsgarantie/i)).toBeInTheDocument();
+    expect(screen.getByText(/Deine Datei wird nicht hochgeladen/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Hintergrund lokal entfernen"));
+    fireEvent.click(screen.getByText("Logo oder Textstelle bereinigen"));
+    expect(onRemoveBackgroundChange).toHaveBeenCalledTimes(1);
+    expect(onRemoveWatermarkChange).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Bereich wählen" }));
     expect(onCleanupAreaClick).toHaveBeenCalledTimes(1);
   });
@@ -45,9 +52,9 @@ describe("QualitySettings", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Qualitätseinstellungen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Grösse und Qualität" }));
 
-    expect(await screen.findByLabelText("Watermark bereinigen")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Logo oder Textstelle bereinigen")).toBeInTheDocument();
     expect(screen.queryByLabelText("Hintergrund lokal entfernen")).not.toBeInTheDocument();
     expect(screen.getByText(/Nur für eigene Videos/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Bereich wählen" }));
@@ -65,8 +72,8 @@ describe("QualitySettings", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Qualitätseinstellungen" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Kleiner JPEG" }));
+    fireEvent.click(screen.getByRole("button", { name: "Grösse und Qualität" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Upload klein" }));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
       mode: "maxSize",

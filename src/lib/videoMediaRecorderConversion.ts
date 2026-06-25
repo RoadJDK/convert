@@ -69,7 +69,7 @@ export async function convertWithMediaRecorder(
       const canvas = document.createElement("canvas");
       canvas.width = renderPlan.target.width;
       canvas.height = renderPlan.target.height;
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext("2d", { willReadFrequently: Boolean(options.removeWatermark) });
 
       if (!ctx) {
         cleanup();

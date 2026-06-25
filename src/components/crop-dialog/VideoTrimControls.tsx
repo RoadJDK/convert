@@ -29,14 +29,14 @@ export const VideoTrimControls = ({
   if (duration <= 0) return null;
 
   return (
-    <div className="space-y-2 rounded-lg border bg-card p-2 sm:p-3">
+    <div className="space-y-3 rounded-[var(--ms-radius-card)] bg-[var(--ms-on-stage-row)] p-3 text-[var(--ms-on-stage)]">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">Video schneiden</span>
         <Button
           variant="ghost"
           size="sm"
           onClick={onReset}
-          className="h-7 gap-1 text-xs"
+          className="h-9 gap-1 text-xs text-[var(--ms-on-stage-muted)] hover:bg-[var(--ms-on-stage-chip)] hover:text-[var(--ms-on-stage)]"
         >
           <ResetFrameIcon className="h-3 w-3" />
           Zurücksetzen
@@ -48,21 +48,27 @@ export const VideoTrimControls = ({
           variant="ghost"
           size="sm"
           onClick={onTogglePlayback}
-          className="h-7 w-7 p-0"
+          className="h-9 w-9 p-0 text-[var(--ms-on-stage)] hover:bg-[var(--ms-on-stage-chip)]"
           title={isPlaying ? "Pause" : "Play"}
         >
           {isPlaying ? <PauseFrameIcon className="h-4 w-4" /> : <ConvertPlayIcon className="h-4 w-4" />}
         </Button>
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-xs text-[var(--ms-on-stage-muted)]">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
       </div>
 
       <div className="space-y-2">
-        <div className="flex justify-between font-mono text-xs text-muted-foreground">
-          <span className="text-green-600">{formatTime(trimStart)}</span>
-          <span>{formatTime(currentTime)}</span>
-          <span className="text-red-600">{formatTime(trimEnd)}</span>
+        <div className="grid grid-cols-3 gap-2 text-xs text-[var(--ms-on-stage-muted)]">
+          <span>
+            Start <span className="font-mono text-accent">{formatTime(trimStart)}</span>
+          </span>
+          <span className="text-center">
+            Position <span className="font-mono">{formatTime(currentTime)}</span>
+          </span>
+          <span className="text-right">
+            Ende <span className="font-mono text-[var(--ms-on-stage)]">{formatTime(trimEnd)}</span>
+          </span>
         </div>
 
         <div className="relative h-8">
@@ -74,9 +80,9 @@ export const VideoTrimControls = ({
             step={0.1}
             className="absolute inset-0 z-10 flex w-full touch-none select-none items-center"
           >
-            <SliderPrimitive.Track className="relative h-6 w-full grow overflow-hidden rounded-md bg-muted">
+            <SliderPrimitive.Track className="relative h-6 w-full grow overflow-hidden rounded-[var(--ms-radius-chip)] bg-[var(--ms-on-stage-chip)]">
               <div
-                className="absolute h-full bg-primary/20"
+                className="absolute h-full bg-[var(--ms-accent-tint)]"
                 style={{
                   left: `${(trimStart / duration) * 100}%`,
                   width: `${((trimEnd - trimStart) / duration) * 100}%`,
@@ -84,7 +90,7 @@ export const VideoTrimControls = ({
               />
             </SliderPrimitive.Track>
             <SliderPrimitive.Thumb
-              className="block h-5 w-1 cursor-ew-resize rounded-full bg-primary shadow-lg ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="block h-5 w-1 cursor-ew-resize rounded-full bg-[var(--ms-on-stage)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Position"
             />
           </SliderPrimitive.Root>
@@ -98,22 +104,22 @@ export const VideoTrimControls = ({
             minStepsBetweenThumbs={1}
             className="pointer-events-none absolute inset-0 z-20 flex w-full touch-none select-none items-center"
           >
-            <SliderPrimitive.Track className="pointer-events-none relative h-6 w-full grow overflow-hidden rounded-md">
+            <SliderPrimitive.Track className="pointer-events-none relative h-6 w-full grow overflow-hidden rounded-[var(--ms-radius-chip)]">
               <SliderPrimitive.Range className="pointer-events-none absolute h-full" />
             </SliderPrimitive.Track>
             <SliderPrimitive.Thumb
-              className="pointer-events-auto block h-8 w-3 cursor-ew-resize rounded-sm border-2 border-green-500 bg-green-500 shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="pointer-events-auto block h-8 w-3 cursor-ew-resize rounded-[var(--ms-radius-chip)] border-2 border-accent bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Start"
             />
             <SliderPrimitive.Thumb
-              className="pointer-events-auto block h-8 w-3 cursor-ew-resize rounded-sm border-2 border-red-500 bg-red-500 shadow-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="pointer-events-auto block h-8 w-3 cursor-ew-resize rounded-[var(--ms-radius-chip)] border-2 border-[var(--ms-on-stage)] bg-[var(--ms-on-stage)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Ende"
             />
           </SliderPrimitive.Root>
         </div>
       </div>
 
-      <p className="text-center text-xs text-muted-foreground">
+      <p className="text-center text-xs text-[var(--ms-on-stage-muted)]">
         Dauer: {formatTime(Math.max(0, trimEnd - trimStart))}
       </p>
     </div>

@@ -67,7 +67,7 @@ export const DownloadDropdown = ({ files, onDownloadIndividual }: DownloadDropdo
       <DropdownMenuTrigger asChild>
         <Button 
           size="sm" 
-          className="gap-2 bg-success text-success-foreground hover:bg-success/90"
+          className="gap-2"
           disabled={isCreatingZip}
         >
           {isCreatingZip ? (

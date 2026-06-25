@@ -6,6 +6,7 @@ import { CompressionStats } from "@/components/CompressionStats";
 import { FileCardActions } from "@/components/file-card/FileCardActions";
 import { FileCardPreview } from "@/components/file-card/FileCardPreview";
 import { useFilePreview } from "@/hooks/useFilePreview";
+import { cn } from "@/lib/utils";
 import {
   type ConvertibleFile,
   formatFileSize,
@@ -62,6 +63,27 @@ export const FileCard = ({
   const { originalDimensions, showPreview } = useFilePreview(file, videoPreviewUrl);
   const extension = getOutputExtension(file.type, file.qualitySettings.outputFormat);
   const showIndividualActions = !selected;
+  const statusLabel = file.status === "pending"
+    ? "bereit"
+    : file.status === "converting"
+      ? "läuft"
+      : file.status === "completed"
+        ? "fertig"
+        : "fehler";
+  const qualityLabel = file.type === "pdf"
+    ? "PDF"
+    : file.qualitySettings.mode === "percentage"
+      ? `${file.qualitySettings.percentage}%`
+      : `max ${file.qualitySettings.maxSizeKB} KB`;
+  const overrideLabels = [
+    file.cropArea ? "Ausschnitt" : null,
+    file.cleanupArea ? "Bereich" : null,
+    file.cleanupMask ? "Freihand" : null,
+    file.trimRange ? "Schnitt" : null,
+    file.videoRotation ? "Rotation" : null,
+    file.removeBackground ? "Hintergrund" : null,
+    file.removeWatermark ? "Bereinigen" : null,
+  ].filter(Boolean);
 
   const getDisplayName = () => {
     const baseName = file.suggestedName || file.originalName.replace(/\.[^/.]+$/, "");
@@ -94,89 +116,97 @@ export const FileCard = ({
 
   return (
     <div
-      className="glass-panel group rounded-xl p-3 transition-all duration-200 hover:border-primary/30 hover:shadow-lifted sm:p-4"
+      className={cn(
+        "ms-file-card group rounded-[var(--ms-radius-card-small)] border border-[var(--ms-hairline)] bg-[var(--ms-card)] p-3 transition-colors duration-200 hover:border-[var(--ms-ink)]",
+        selected && "border-ring bg-[var(--ms-accent-tint)]",
+      )}
       data-testid="file-card"
     >
-      <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap sm:gap-4">
-        {showCheckbox && (
-          <div className="flex items-center pt-2 sm:pt-3">
-            <Checkbox checked={selected} onCheckedChange={(checked) => onSelectChange?.(checked === true)} />
-          </div>
-        )}
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="flex min-w-0 items-start gap-3">
+          {showCheckbox && (
+            <div className="flex items-center pt-3">
+              <Checkbox
+                aria-label={`${getDisplayName()} auswählen`}
+                checked={selected}
+                onCheckedChange={(checked) => onSelectChange?.(checked === true)}
+              />
+            </div>
+          )}
 
-        <FileCardPreview file={file} previewUrl={showPreview} />
+          <FileCardPreview file={file} previewUrl={showPreview} />
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            {isEditing ? (
-              <div className="flex flex-1 items-center gap-2">
-                <Input
-                  value={editName}
-                  onChange={(event) => setEditName(event.target.value)}
-                  onBlur={handleSaveEdit}
-                  onKeyDown={handleKeyDown}
-                  className="h-8 text-sm"
-                  autoFocus
-                />
-                <span className="text-sm text-muted-foreground">.{extension}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              {isEditing ? (
+                <div className="flex flex-1 items-center gap-2">
+                  <Input
+                    value={editName}
+                    onChange={(event) => setEditName(event.target.value)}
+                    onBlur={handleSaveEdit}
+                    onKeyDown={handleKeyDown}
+                    className="h-8 text-sm"
+                    autoFocus
+                  />
+                  <span className="text-sm text-muted-foreground">.{extension}</span>
+                </div>
+              ) : (
+                <>
+                  <p className="truncate text-base font-semibold text-foreground" title={getDisplayName()}>
+                    {getDisplayName()}
+                  </p>
+                  <span className="ms-chip hidden shrink-0 sm:inline">{statusLabel}</span>
+                  {file.status === "completed" && (
+                    <button
+                      onClick={handleStartEdit}
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--ms-radius-pill)] text-muted-foreground transition-colors hover:bg-[var(--ms-accent-tint)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                      aria-label="Exportname ändern"
+                      title="Exportname ändern"
+                    >
+                      <PencilTagIcon className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <span className="truncate" title={file.originalName}>{file.originalName}</span>
+              <span>{formatFileSize(file.file.size)}</span>
+              {file.status === "pending" && <span>{qualityLabel}</span>}
+            </div>
+
+            {(overrideLabels.length > 0 || file.suggestedName) && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {file.suggestedName && <span className="ms-chip ms-chip-accent">KI-Name</span>}
+                {overrideLabels.map((label) => (
+                  <span key={label} className="ms-chip">
+                    {label}
+                  </span>
+                ))}
               </div>
-            ) : (
-              <>
-                <p className="truncate text-sm font-medium text-foreground sm:text-base" title={getDisplayName()}>
-                  {getDisplayName()}
-                </p>
-                {file.status === "completed" && (
-                  <button onClick={handleStartEdit} className="opacity-0 transition-opacity group-hover:opacity-100">
-                    <PencilTagIcon className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                  </button>
-                )}
-              </>
+            )}
+
+            {file.status === "converting" && (
+              <div className="mt-2 sm:mt-3">
+                <Progress value={file.progress} className="h-2" />
+                <p className="mt-1 text-xs text-muted-foreground">{Math.round(file.progress)}%</p>
+              </div>
+            )}
+
+            {file.status === "completed" && file.convertedSize && (
+              <div className="mt-2">
+                <CompressionStats originalSize={file.originalSize} convertedSize={file.convertedSize} />
+              </div>
+            )}
+
+            {file.status === "error" && (
+              <div className="mt-2 flex items-center gap-2 text-destructive">
+                <AlertMarkIcon className="h-4 w-4 shrink-0" />
+                <span className="truncate text-xs">{file.error}</span>
+              </div>
             )}
           </div>
-
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            <span className="hidden sm:inline">{file.originalName} • </span>
-            {formatFileSize(file.file.size)}
-            {file.cropArea && <span className="ml-2 text-primary">• Zugeschnitten</span>}
-            {file.cleanupArea && <span className="ml-2 text-primary">• Bereinigungsbereich</span>}
-            {file.cleanupMask && <span className="ml-2 text-primary">• Freihandmaske</span>}
-            {file.trimRange && <span className="ml-2 text-accent">• Geschnitten</span>}
-            {file.videoRotation && <span className="ml-2 text-accent">• Gedreht</span>}
-          </p>
-
-          {file.status === "pending" && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {file.type === "pdf"
-                ? "PDF: lokal neu schreiben und Metadaten entfernen"
-                : `Qualität: ${file.qualitySettings.mode === "percentage" ? `${file.qualitySettings.percentage}%` : `max ${file.qualitySettings.maxSizeKB} KB`}`}
-            </p>
-          )}
-
-          {file.status === "converting" && (
-            <div className="mt-2 sm:mt-3">
-              <Progress value={file.progress} className="h-2" />
-              <p className="mt-1 text-xs text-muted-foreground">Konvertiere... {Math.round(file.progress)}%</p>
-            </div>
-          )}
-
-          {file.status === "completed" && file.convertedSize && (
-            <div className="mt-2">
-              <CompressionStats originalSize={file.originalSize} convertedSize={file.convertedSize} />
-            </div>
-          )}
-
-          {file.status === "error" && (
-            <div className="mt-2 flex items-center gap-2 text-destructive">
-              <AlertMarkIcon className="h-4 w-4 shrink-0" />
-              <span className="truncate text-xs">{file.error}</span>
-            </div>
-          )}
-
-          {file.suggestedName && file.status === "completed" && (
-            <div className="mt-2 flex items-center gap-2 rounded-md bg-primary/10 px-2 py-1">
-              <span className="text-xs text-primary">KI-Vorschlag angewendet</span>
-            </div>
-          )}
         </div>
 
         <FileCardActions

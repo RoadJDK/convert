@@ -376,35 +376,41 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col overflow-hidden">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <CropFrameIcon className="h-5 w-5" />
+      <DialogContent className="flex h-[calc(100dvh_-_32px)] max-w-[min(1180px,calc(100vw_-_32px))] grid-rows-none flex-col overflow-hidden border-0 bg-[var(--ms-card)] p-0 sm:rounded-[var(--ms-radius-panel)]">
+        <DialogHeader className="flex-shrink-0 border-b border-[var(--ms-hairline)] px-5 py-4 pr-14 text-left">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="ms-chip ms-chip-accent">{isCleanupMode ? "Bereinigen" : isVideo ? "Video" : "Bild"}</span>
+            <span className="ms-chip">{file.originalName}</span>
+          </div>
+          <DialogTitle className="mt-2 flex items-center gap-2">
+            <CropFrameIcon className="h-5 w-5 text-accent" />
             {isCleanupMode ? 'Bereich bereinigen' : isVideo ? 'Video bearbeiten' : 'Bild bearbeiten'}
           </DialogTitle>
           <DialogDescription className="sr-only">
             {isCleanupMode
-              ? 'Bereich für lokale Objekt- oder Watermark-Bereinigung markieren.'
-              : 'Ausschnitt, Zielgröße und bei Videos den Trim-Bereich einstellen.'}
+              ? 'Bereich für lokale Logo-, Textstellen- oder Objektbereinigung markieren.'
+              : 'Ausschnitt, Zielgrösse und bei Videos den Trim-Bereich einstellen.'}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 grid grid-cols-1 gap-3 md:grid-cols-[1fr_280px] overflow-auto">
-          {/* Preview */}
-          <div className="space-y-2">
-            <div className="flex justify-center bg-muted/30 rounded-lg p-2 max-h-[40vh] overflow-hidden">
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="flex min-h-0 flex-col gap-3 bg-[var(--ms-stage)] p-3 text-[var(--ms-on-stage)] sm:p-5">
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[var(--ms-radius-card)] bg-[var(--ms-on-stage-row)] p-2">
               {imgSrc && !isVideo && showFreehandCleanup && (
-                <div className="relative inline-block max-h-[38vh] select-none touch-none">
+                <div className="relative inline-block max-h-full max-w-full select-none touch-none">
                   <img
                     ref={imgRef}
                     src={imgSrc}
                     alt="Vorschau zum Maskieren"
                     onLoad={onImageLoad}
                     draggable={false}
-                    className="max-h-[38vh] object-contain"
+                    className="max-h-[calc(100dvh_-_260px)] max-w-full object-contain"
                   />
                   <svg
-                    aria-label="Freihandmaske zeichnen"
+                    role="application"
+                    tabIndex={0}
+                    aria-label="Freihand zeichnen"
+                    aria-describedby="cleanup-freehand-instructions"
                     className="absolute inset-0 h-full w-full cursor-crosshair touch-none"
                     data-testid="cleanup-freehand-mask"
                     preserveAspectRatio="none"
@@ -419,7 +425,7 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
                         key={`${index}-${stroke.points.length}`}
                         fill="none"
                         points={stroke.points.map((point) => `${point.x},${point.y}`).join(" ")}
-                        stroke="rgba(59, 130, 246, 0.78)"
+                        stroke="var(--ms-accent)"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth={stroke.brushRadius * 2}
@@ -434,14 +440,14 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
                   onChange={handleCropChange}
                   onComplete={handleCropComplete}
                   aspect={cropAspect}
-                  className="max-h-[38vh]"
+                  className="max-h-full"
                 >
                   <img
                     ref={imgRef}
                     src={imgSrc}
                     alt="Vorschau zum Zuschneiden"
                     onLoad={onImageLoad}
-                    className="max-h-[38vh] object-contain"
+                    className="max-h-[calc(100dvh_-_260px)] max-w-full object-contain"
                   />
                 </ReactCrop>
               )}
@@ -451,14 +457,19 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
                   onChange={handleCropChange}
                   onComplete={handleCropComplete}
                   aspect={cropAspect}
-                  className="max-h-[38vh]"
+                  className="max-h-full"
                 >
                   <video
                     ref={videoRef}
                     src={videoSrc}
                     onLoadedMetadata={handleVideoLoad}
                     onTimeUpdate={handleVideoTimeUpdate}
-                    className="max-h-[38vh] object-contain"
+                    className="max-h-[calc(100dvh_-_260px)] max-w-full object-contain"
+                    style={{
+                      transform: videoRotation ? `rotate(${videoRotation}deg)` : undefined,
+                      transformOrigin: "center",
+                      transition: "transform var(--ms-duration-link) var(--ms-ease-brand)",
+                    }}
                     muted
                     playsInline
                   />
@@ -481,12 +492,13 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
             )}
           </div>
 
-          <div className="space-y-3">
+          <div className="min-h-0 overflow-y-auto border-l border-[var(--ms-hairline)] bg-[var(--ms-cream)] p-4">
             {isCleanupMode ? (
-              <div className="space-y-3 rounded-lg border border-border bg-secondary/30 p-3">
-                <p className="text-sm text-muted-foreground">
-                  Markiere nur eigene oder autorisierte Inhalte. Die lokale Inpainting-Stufe rekonstruiert maskierte Pixel aus der Umgebung, ohne vollständige Entfernungsgarantie.
-                </p>
+              <div className="space-y-4">
+                <div>
+                  <span className="ms-chip">Bereich</span>
+                  <h3 className="ms-h4 mt-2">Markieren.</h3>
+                </div>
                 {!isVideo && (
                   <ToggleGroup
                     type="single"
@@ -504,22 +516,25 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
                     size="sm"
                     variant="outline"
                   >
-                    <ToggleGroupItem value="rectangle" aria-label="Rechteckmaske">
+                    <ToggleGroupItem value="rectangle" aria-label="Rechteckmaske" className="h-9 text-xs">
                       Rechteck
                     </ToggleGroupItem>
-                    <ToggleGroupItem value="freehand" aria-label="Freihandmaske">
+                    <ToggleGroupItem value="freehand" aria-label="Freihand" className="h-9 text-xs">
                       Freihand
                     </ToggleGroupItem>
                   </ToggleGroup>
                 )}
                 {cleanupSelectionMode === "freehand" && !isVideo && (
                   <div className="space-y-3">
+                    <p id="cleanup-freehand-instructions" className="text-xs leading-relaxed text-muted-foreground">
+                      Mit Maus, Stift oder Finger über den Bereich zeichnen. Für Tastaturbedienung Rechteck wählen.
+                    </p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Pinsel</span>
                       <span className="text-xs font-medium">{Math.round(cleanupBrushRadius * 100)}%</span>
                     </div>
                     <Slider
-                      aria-label="Pinselgröße"
+                      aria-label="Pinselgrösse"
                       value={[cleanupBrushRadius]}
                       min={0.03}
                       max={0.2}
@@ -530,31 +545,40 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 w-full text-xs"
+                      className="h-9 w-full text-xs"
                       disabled={cleanupMaskStrokes.length === 0}
                       onClick={() => setCleanupMaskStrokesSync([])}
                     >
-                      Maske leeren
+                      Zeichnung löschen
                     </Button>
                   </div>
                 )}
+                <p className="ms-note">
+                  Nur eigene oder autorisierte Inhalte markieren. Die lokale Bereinigung ist eine Hilfe, keine vollständige Entfernungsgarantie.
+                </p>
               </div>
             ) : (
-              <ResizeControls
-                aspectHeight={aspectHeight}
-                aspectLocked={aspectLocked}
-                aspectWidth={aspectWidth}
-                completedCrop={completedCrop}
-                cropAspectLocked={cropAspectLocked}
-                dimensions={dimensions}
-                originalDimensions={originalDimensions}
-                onAspectHeightChange={handleAspectHeightChange}
-                onAspectWidthChange={handleAspectWidthChange}
-                onDimensionChange={handleDimensionChange}
-                onResetDimensions={handleResetDimensions}
-                onToggleAspectLock={toggleAspectLock}
-                onToggleCropAspect={toggleCropAspect}
-              />
+              <div className="space-y-4">
+                <div>
+                  <span className="ms-chip">Bearbeiten</span>
+                  <h3 className="ms-h4 mt-2">Ausschnitt & Grösse.</h3>
+                </div>
+                <ResizeControls
+                  aspectHeight={aspectHeight}
+                  aspectLocked={aspectLocked}
+                  aspectWidth={aspectWidth}
+                  completedCrop={completedCrop}
+                  cropAspectLocked={cropAspectLocked}
+                  dimensions={dimensions}
+                  originalDimensions={originalDimensions}
+                  onAspectHeightChange={handleAspectHeightChange}
+                  onAspectWidthChange={handleAspectWidthChange}
+                  onDimensionChange={handleDimensionChange}
+                  onResetDimensions={handleResetDimensions}
+                  onToggleAspectLock={toggleAspectLock}
+                  onToggleCropAspect={toggleCropAspect}
+                />
+              </div>
             )}
             {!isCleanupMode && isVideo && (
               <VideoRotationControls
@@ -567,12 +591,12 @@ export const CropDialog = ({ file, open, mode = "crop", onClose, onApply }: Crop
           </div>
         </div>
 
-        <DialogFooter className="flex-shrink-0 gap-2 pt-2 border-t">
+        <DialogFooter className="flex-shrink-0 gap-2 border-t border-[var(--ms-hairline)] bg-[var(--ms-card)] p-4">
           <Button variant="outline" onClick={onClose}>
             Abbrechen
           </Button>
           <Button onClick={handleApply}>
-            {isCleanupMode ? 'Bereich verwenden' : 'Anwenden'}
+            {isCleanupMode ? 'Bereich übernehmen' : 'Änderung übernehmen'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -18,7 +18,7 @@ const {
     <meta charset="UTF-8" />
     <meta name="description" content={description} />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#13151a" />
+    <meta name="theme-color" content="rgb(250, 250, 250)" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -32,8 +32,61 @@ const {
     <div class="grain" aria-hidden="true"></div>
     <script is:inline>
       if ("serviceWorker" in navigator) {
+        const reloadKey = "maibach-convert-sw-refresh";
+        const serviceWorkerUrl = "/service-worker.js?v=3";
+
+        const markForReload = () => {
+          try {
+            sessionStorage.setItem(reloadKey, "1");
+          } catch {
+            // Ignore storage failures; the active controller still changes.
+          }
+        };
+
+        const consumeReloadMark = () => {
+          try {
+            const shouldReload = sessionStorage.getItem(reloadKey) === "1";
+            sessionStorage.removeItem(reloadKey);
+            return shouldReload;
+          } catch {
+            return false;
+          }
+        };
+
+        const activateWaitingWorker = (worker) => {
+          if (!worker || !navigator.serviceWorker.controller) {
+            return;
+          }
+
+          markForReload();
+          worker.postMessage({ type: "SKIP_WAITING" });
+        };
+
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (consumeReloadMark()) {
+            window.location.reload();
+          }
+        });
+
         window.addEventListener("load", () => {
-          navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+          navigator.serviceWorker
+            .register(serviceWorkerUrl)
+            .then((registration) => {
+              registration.update().catch(() => {});
+
+              activateWaitingWorker(registration.waiting);
+
+              registration.addEventListener("updatefound", () => {
+                const worker = registration.installing;
+
+                worker?.addEventListener("statechange", () => {
+                  if (worker.state === "installed") {
+                    activateWaitingWorker(worker);
+                  }
+                });
+              });
+            })
+            .catch(() => {});
         });
       }
     </script>

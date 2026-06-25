@@ -14,7 +14,7 @@ export default defineConfig({
     command: "bun run build && bunx astro preview --host 127.0.0.1 --port 4173",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env.CI,
-    timeout: 90_000,
+    timeout: 180_000,
   },
   projects: [
     {

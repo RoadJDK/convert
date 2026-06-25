@@ -84,8 +84,8 @@ export function createLocalRemovalPlan(input: LocalRemovalPlanInput): LocalRemov
     tier: lowResolution ? "smart-crop" : "local-inpaint",
     capability: "degraded",
     expectedOutcome: "degraded",
-    uiLabel: "Watermark bereinigen",
-    uiDescription: "Lokale Masken-Inpainting-Stufe, keine vollständige Entfernungsgarantie.",
+    uiLabel: "Logo oder Textstelle bereinigen",
+    uiDescription: "Markierter Bereich wird lokal aus umliegenden Pixeln nachgezeichnet. Keine vollständige Entfernungsgarantie.",
     limitations: [
       "Keine Garantie für vollständige Entfernung.",
       lowResolution

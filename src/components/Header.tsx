@@ -6,24 +6,25 @@ export const Header = () => {
   const [statsOpen, setStatsOpen] = useState(false);
 
   return (
-    <header className="nav" id="nav">
-      <div className="row spotlit">
-        <div className="navactions">
+    <header className="ms-nav" id="nav">
+      <div className="ms-rail ms-nav-inner">
+        <a className="inline-flex min-h-11 items-center" href="/" aria-label="Maibach Convert Startseite">
+          <img src="/assets/logo-full.svg" alt="Maibach Systems" className="h-8 w-auto" width="360" height="112" />
+        </a>
+
+        <div className="flex items-center gap-3">
           <button
             onClick={() => setStatsOpen(true)}
-            className="navlink navlink-feature"
-            title="Statistiken"
+            className="ms-icon-button inline-flex h-11 w-11 items-center justify-center p-0"
+            aria-label="Lokale Nutzung öffnen"
+            title="Lokale Nutzung"
           >
             <AppStatsIcon className="h-4 w-4" />
-            Statistiken
           </button>
-          <span className="status">
-            <span className="dot" aria-hidden="true" />
+          <span className="ms-status-pill">
+            <span className="ms-status-dot" aria-hidden="true" />
             Alles lokal
           </span>
-          <a className="brand" href="/" aria-label="Maibach Convert Startseite">
-            <img src="/assets/logo-mark-white.svg" alt="Maibach Systems" className="logo-mark" width="209" height="456" />
-          </a>
         </div>
       </div>
 

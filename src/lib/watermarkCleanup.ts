@@ -100,7 +100,7 @@ export const createWatermarkCleanupPlan = (size: ImageSize, manualArea?: CropAre
 };
 
 export const applyWatermarkCleanup = (canvas: EncodingCanvas, manualArea?: CropArea, cleanupMask?: CleanupMask): void => {
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) {
     throw new Error("Failed to create canvas context");
   }

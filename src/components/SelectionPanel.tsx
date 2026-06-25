@@ -14,7 +14,7 @@ import {
   RenameSparkIcon,
 } from '@/components/icons/MediaConvertIcons';
 
-interface BulkSettingsSidebarProps {
+interface SelectionPanelProps {
   open: boolean;
   selectedCount: number;
   selectedType?: FileType | null;
@@ -32,7 +32,7 @@ interface BulkSettingsSidebarProps {
   onSplitPdfs?: () => void;
 }
 
-export const BulkSettingsSidebar = ({
+export const SelectionPanel = ({
   open,
   selectedCount,
   selectedType,
@@ -48,13 +48,13 @@ export const BulkSettingsSidebar = ({
   onReorderPdf,
   onRotatePdfs,
   onSplitPdfs,
-}: BulkSettingsSidebarProps) => {
+}: SelectionPanelProps) => {
   const [mode, setMode] = useState<QualityMode>('percentage');
   const [percentage, setPercentage] = useState(100);
   const [maxSizeKB, setMaxSizeKB] = useState(500);
   const [pageOrder, setPageOrder] = useState('');
 
-  // Reset when sidebar opens
+  // Reset when the selection panel opens.
   useEffect(() => {
     if (open) {
       setMode('percentage');
@@ -77,25 +77,37 @@ export const BulkSettingsSidebar = ({
 
   const isPdfSelection = selectedType === 'pdf';
   const presets = selectedType && !isPdfSelection ? getConversionPresets(selectedType) : [];
+  const laneName = selectedType === 'image' ? 'Bild' : selectedType === 'video' ? 'Video' : 'PDF';
+  const lanePlural = selectedType === 'image' ? 'Bilder' : selectedType === 'video' ? 'Videos' : 'PDFs';
+  const selectionTitle = selectedType
+    ? selectedCount === 1
+      ? `1 ${laneName} ausgewählt`
+      : `${selectedCount} ${lanePlural} ausgewählt`
+    : `${selectedCount} Datei${selectedCount !== 1 ? 'en' : ''} ausgewählt`;
 
   return (
     <aside
       role="region"
       aria-labelledby="bulk-settings-title"
-      className="glass-panel fixed inset-x-4 bottom-4 z-[60] max-h-[calc(100vh-2rem)] overflow-auto rounded-xl p-5 shadow-2xl sm:inset-x-auto sm:right-4 sm:top-1/2 sm:w-[340px] sm:-translate-y-1/2"
+      className="ms-panel overflow-hidden bg-[var(--ms-card)]"
     >
-      <div className="border-b border-white/10 pb-4">
-        <h2 id="bulk-settings-title" className="text-lg font-semibold text-foreground">
-          {selectedCount} Datei{selectedCount !== 1 ? 'en' : ''} ausgewählt
-        </h2>
+      <div className="ms-hairline-bottom flex flex-wrap items-start justify-between gap-3 p-4">
+        <div>
+          <span className="ms-chip ms-chip-accent">Auswahl</span>
+          <h2 id="bulk-settings-title" className="ms-h4 mt-2">
+            {selectionTitle}
+          </h2>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Auswahl lösen
+        </Button>
       </div>
 
-      <div className="space-y-6 py-6">
-        {/* KI-Umbenennung */}
+      <div className="space-y-4 bg-[var(--ms-cream)] p-4">
         {onAIRenameAll && !isPdfSelection && (
-          <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.055] p-4">
+          <div className="flex items-center justify-between gap-3 border-y border-[var(--ms-hairline)] py-3">
             <div className="flex items-center gap-2">
-              <RenameSparkIcon className="h-4 w-4 text-primary" />
+              <RenameSparkIcon className="h-4 w-4 text-accent" />
               <span className="text-sm font-medium">KI-Umbenennung</span>
             </div>
             <Button
@@ -103,7 +115,7 @@ export const BulkSettingsSidebar = ({
               size="icon"
               onClick={onAIRenameAll}
               disabled={isAIRenaming}
-              className="h-8 w-8"
+              className="h-9 w-9"
               title="KI-Umbenennung"
             >
               {isAIRenaming ? (
@@ -116,15 +128,15 @@ export const BulkSettingsSidebar = ({
         )}
 
         {isPdfSelection && (
-          <div className="space-y-4 rounded-lg border border-white/10 bg-white/[0.055] p-4">
+          <div className="space-y-4">
             <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--ms-radius-card-small)] bg-[var(--ms-accent-tint)] text-accent">
                 <BatchFilesIcon className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm font-medium">PDF-Werkzeuge</h3>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                  Zusammenführen läuft lokal im Browser. Originale bleiben unverändert; private Inhalte werden nicht hochgeladen.
+                <h3 className="text-sm font-medium">PDFs zu einer Datei machen</h3>
+                <p className="ms-note mt-1">
+                  Lokal im Browser. Die Reihenfolge in der Liste wird übernommen.
                 </p>
               </div>
             </div>
@@ -135,116 +147,118 @@ export const BulkSettingsSidebar = ({
               disabled={selectedCount < 2 || !onMergePdfs}
             >
               <BatchFilesIcon className="h-4 w-4" />
-              PDFs zusammenführen
+              PDFs zu einer Datei machen
             </Button>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="gap-2"
-                onClick={onSplitPdfs}
-                disabled={!onSplitPdfs}
-              >
-                <BatchFilesIcon className="h-4 w-4" />
-                Seiten aufteilen
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="gap-2"
-                onClick={() => onRotatePdfs?.(90)}
-                disabled={!onRotatePdfs}
-              >
-                90° drehen
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="gap-2 sm:col-span-2"
-                onClick={onCompressPdfs}
-                disabled={!onCompressPdfs}
-              >
-                PDFs komprimieren
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="gap-2 sm:col-span-2"
-                onClick={onRenderPdfPagesToImages}
-                disabled={!onRenderPdfPagesToImages}
-              >
-                PDF-Seiten als PNG
-              </Button>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pdf-page-order">Seitenfolge</Label>
-              <div className="grid gap-2">
-                <Input
-                  id="pdf-page-order"
-                  value={pageOrder}
-                  onChange={(event) => setPageOrder(event.target.value)}
-                  placeholder="z.B. 3,1,2"
-                  disabled={selectedCount !== 1 || !onReorderPdf}
-                />
+            <details className="rounded-[var(--ms-radius-card-small)] border border-[var(--ms-hairline)] bg-[var(--ms-card)] p-3">
+              <summary className="cursor-pointer text-sm font-medium">Weitere PDF-Optionen</summary>
+              <div className="mt-3 grid grid-cols-1 gap-2">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => onReorderPdf?.(pageOrder)}
-                  disabled={selectedCount !== 1 || !pageOrder.trim() || !onReorderPdf}
+                  className="gap-2"
+                  onClick={onSplitPdfs}
+                  disabled={!onSplitPdfs}
                 >
-                  Seiten neu sortieren
+                  <BatchFilesIcon className="h-4 w-4" />
+                  Seiten aufteilen
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => onRotatePdfs?.(90)}
+                  disabled={!onRotatePdfs}
+                >
+                  90° drehen
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={onCompressPdfs}
+                  disabled={!onCompressPdfs}
+                >
+                  PDFs kleiner machen
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={onRenderPdfPagesToImages}
+                  disabled={!onRenderPdfPagesToImages}
+                >
+                  PDF-Seiten als Bilder speichern
+                </Button>
+                <div className="space-y-2 pt-2">
+                  <Label htmlFor="pdf-page-order">Seitenfolge</Label>
+                  <div className="grid gap-2">
+                    <Input
+                      id="pdf-page-order"
+                      value={pageOrder}
+                      onChange={(event) => setPageOrder(event.target.value)}
+                      placeholder="z.B. 3,1,2"
+                      disabled={selectedCount !== 1 || !onReorderPdf}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => onReorderPdf?.(pageOrder)}
+                      disabled={selectedCount !== 1 || !pageOrder.trim() || !onReorderPdf}
+                    >
+                      Seiten neu sortieren
+                    </Button>
+                  </div>
+                  {selectedCount !== 1 && (
+                    <p className="text-xs text-muted-foreground">
+                      Neu sortieren ist pro einzelner PDF-Datei verfügbar.
+                    </p>
+                  )}
+                </div>
               </div>
-              {selectedCount !== 1 && (
-                <p className="text-xs text-muted-foreground">
-                  Neu sortieren ist pro einzelner PDF-Datei verfügbar.
-                </p>
-              )}
-            </div>
+            </details>
           </div>
         )}
 
         {selectedType === 'image' && (onCreatePdfFromImages || onCreateSearchablePdfFromImages) && (
-          <div className="space-y-3 rounded-lg border border-white/10 bg-white/[0.055] p-4">
-            <div>
-              <h3 className="text-sm font-medium">PDF erstellen</h3>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                Bilder und OCR-PDFs werden lokal im Browser erstellt. Originale bleiben unverändert.
+          <section className="rounded-[var(--ms-radius-card-small)] border border-[var(--ms-hairline)] bg-[var(--ms-card)] p-3" aria-label="Handout aus Bildern">
+            <h3 className="text-sm font-medium">Handout aus Bildern</h3>
+            <div className="mt-3 space-y-3">
+              <p className="ms-note mt-1">
+                Lokal im Browser aus der Auswahl erstellen.
               </p>
+              {onCreatePdfFromImages && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={onCreatePdfFromImages}
+                >
+                  <BatchFilesIcon className="h-4 w-4" />
+                  Bilder als PDF speichern
+                </Button>
+              )}
+              {onCreateSearchablePdfFromImages && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={onCreateSearchablePdfFromImages}
+                >
+                  <BatchFilesIcon className="h-4 w-4" />
+                  Text in PDF suchbar machen
+                </Button>
+              )}
             </div>
-            {onCreatePdfFromImages && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full gap-2"
-                onClick={onCreatePdfFromImages}
-              >
-                <BatchFilesIcon className="h-4 w-4" />
-                Bilder als PDF bündeln
-              </Button>
-            )}
-            {onCreateSearchablePdfFromImages && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full gap-2"
-                onClick={onCreateSearchablePdfFromImages}
-              >
-                <BatchFilesIcon className="h-4 w-4" />
-                OCR-PDF erstellen
-              </Button>
-            )}
-          </div>
+          </section>
         )}
 
-        {/* Quality settings */}
         {!isPdfSelection && (
         <div className="space-y-4">
-          <h3 className="text-sm font-medium">Qualitätseinstellungen</h3>
+          <h3 className="text-sm font-medium">Grösse & Qualität</h3>
 
           {presets.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Presets</p>
+              <p className="text-xs font-medium text-muted-foreground">Schnellauswahl</p>
               <div className="grid grid-cols-2 gap-2">
                 {presets.map((preset) => (
                   <Button
@@ -252,7 +266,7 @@ export const BulkSettingsSidebar = ({
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-8 text-xs"
+                    className="h-9 text-xs"
                     title={preset.description}
                     onClick={() => {
                       onApply({
@@ -279,7 +293,7 @@ export const BulkSettingsSidebar = ({
               </TabsTrigger>
               <TabsTrigger value="maxSize" className="gap-2">
                 <MaxSizeIcon className="h-4 w-4" />
-                Max Größe
+                Zielgrösse
               </TabsTrigger>
             </TabsList>
 
@@ -296,13 +310,13 @@ export const BulkSettingsSidebar = ({
                 step={5}
               />
               <p className="text-sm text-muted-foreground">
-                100% = Standard • 200% = Maximum
+                100% = Standard, 200% = Maximum
               </p>
             </TabsContent>
 
             <TabsContent value="maxSize" className="mt-4 space-y-4">
               <div className="flex items-center gap-3">
-                <Label className="whitespace-nowrap">Max Größe</Label>
+                <Label className="whitespace-nowrap">Zielgrösse</Label>
                 <Input
                   type="number"
                   value={maxSizeKB}
@@ -313,7 +327,7 @@ export const BulkSettingsSidebar = ({
                 <span className="text-sm text-muted-foreground">KB</span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Qualität wird automatisch angepasst um die Zielgröße zu erreichen
+                Qualität wird automatisch angepasst, um die Zielgrösse zu erreichen.
               </p>
             </TabsContent>
           </Tabs>
@@ -321,15 +335,14 @@ export const BulkSettingsSidebar = ({
         )}
       </div>
 
-      {/* Actions */}
-      <div className="mt-4 border-t border-white/10 pt-4">
+      <div className="ms-hairline-top p-4">
         <div className="flex gap-3">
           <Button variant="outline" onClick={onClose} className="flex-1">
-            Abbrechen
+            Auswahl lösen
           </Button>
           {!isPdfSelection && (
             <Button onClick={handleApply} className="flex-1">
-              Anwenden
+              Änderungen übernehmen
             </Button>
           )}
         </div>

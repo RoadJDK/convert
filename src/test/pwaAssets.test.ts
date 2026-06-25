@@ -15,8 +15,8 @@ describe("PWA offline assets", () => {
       start_url: "/",
       scope: "/",
       display: "standalone",
-      theme_color: "#13151a",
-      background_color: "#0c0e12",
+      theme_color: "rgb(250, 250, 250)",
+      background_color: "rgb(250, 250, 250)",
     });
     expect(manifest.icons).toEqual(
       expect.arrayContaining([

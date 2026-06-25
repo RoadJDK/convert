@@ -84,7 +84,7 @@ export const useImageConverter = () => {
 
           // Add white background if needed (for transparent images going to JPEG)
           if (addWhiteBackground) {
-            ctx.fillStyle = "#FFFFFF";
+            ctx.fillStyle = "white";
             ctx.fillRect(0, 0, target.width, target.height);
           }
 

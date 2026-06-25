@@ -15,11 +15,14 @@ export const VideoRotationControls = ({
   onRotateRight,
   onReset,
 }: VideoRotationControlsProps) => (
-  <div className="space-y-2 rounded-lg border bg-card p-2 sm:p-3">
+  <div className="mt-4 space-y-3 border-t border-[var(--ms-hairline)] pt-4">
     <div className="flex items-center justify-between">
       <span className="text-sm font-medium">Drehung</span>
       <span className="font-mono text-xs text-muted-foreground">{rotation}°</span>
     </div>
+    <p className="text-xs leading-relaxed text-muted-foreground">
+      Die Vorschau zeigt die Drehung vor dem Export.
+    </p>
 
     <div className="grid grid-cols-3 gap-2">
       <Button

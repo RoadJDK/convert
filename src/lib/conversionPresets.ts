@@ -18,8 +18,8 @@ export type ConversionPreset = {
 const CONVERSION_PRESETS: ConversionPreset[] = [
   {
     id: "image-web-small",
-    label: "Web klein",
-    description: "WebP mit balancierter Qualität",
+    label: "E-Mail/Web",
+    description: "Kleinere Bilddatei mit guter Qualität",
     fileType: "image",
     settings: {
       mode: "percentage",
@@ -31,8 +31,8 @@ const CONVERSION_PRESETS: ConversionPreset[] = [
   },
   {
     id: "image-jpeg-small",
-    label: "Kleiner JPEG",
-    description: "JPEG mit Zielgröße für Uploads",
+    label: "Upload klein",
+    description: "Für Formulare, Shops und E-Mail-Anhänge",
     fileType: "image",
     settings: {
       mode: "maxSize",
@@ -44,8 +44,8 @@ const CONVERSION_PRESETS: ConversionPreset[] = [
   },
   {
     id: "image-png-clean",
-    label: "PNG sauber",
-    description: "PNG ohne Formatwechsel",
+    label: "Originalnah",
+    description: "Saubere Bilddatei ohne Qualitätsverlust",
     fileType: "image",
     settings: {
       mode: "percentage",
@@ -57,8 +57,8 @@ const CONVERSION_PRESETS: ConversionPreset[] = [
   },
   {
     id: "video-web-small",
-    label: "Web klein",
-    description: "WebM mit reduzierter Auflösung",
+    label: "Upload klein",
+    description: "Kleineres Video für Web und Chat",
     fileType: "video",
     settings: {
       mode: "percentage",
@@ -70,8 +70,8 @@ const CONVERSION_PRESETS: ConversionPreset[] = [
   },
   {
     id: "video-mp4-archive",
-    label: "MP4 Archiv",
-    description: "MP4 mit Originalauflösung",
+    label: "Zum Behalten",
+    description: "Video im kompatiblen Format mit Originalgrösse",
     fileType: "video",
     settings: {
       mode: "percentage",

@@ -21,70 +21,45 @@ export const StatsPopup = ({ open, onClose }: StatsPopupProps) => {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="overflow-hidden p-0 sm:max-w-md">
         <DialogHeader>
+          <div className="border-b border-[var(--ms-hairline)] px-5 py-4 pr-14 text-left">
           <DialogTitle className="flex items-center gap-2">
-            <TrendStatsIcon className="h-5 w-5 text-primary" />
-            Deine Statistiken
+            <TrendStatsIcon className="h-5 w-5 text-accent" />
+            Lokale Nutzung
           </DialogTitle>
-          <DialogDescription>
-            Lokal in diesem Browser gespeicherte Nutzung.
+          <DialogDescription className="mt-1">
+            Nur in diesem Browser gespeichert.
           </DialogDescription>
+          </div>
         </DialogHeader>
 
-        <div className="grid gap-4 py-4">
-            {/* Total conversions */}
-            <div className="rounded-xl bg-gradient-to-br from-primary/10 to-accent/10 p-4 text-center">
-              <p className="text-4xl font-bold text-foreground">{totalConversions}</p>
-              <p className="text-sm text-muted-foreground mt-1">Konvertierungen gesamt</p>
-            </div>
+        <div className="bg-[var(--ms-cream)] px-5 py-5">
+          <div className="mb-4">
+            <p className="ms-h2 text-foreground">{totalConversions}</p>
+            <p className="ms-note">Konvertierungen gesamt</p>
+          </div>
 
-            {/* Individual stats */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-lg bg-card border border-border p-3 text-center">
-                <div className="flex justify-center mb-2">
-                  <div className="rounded-full bg-primary/10 p-2">
-                    <ImageFormatIcon className="h-4 w-4 text-primary" />
-                  </div>
-                </div>
-                <p className="text-2xl font-semibold">{stats.imagesConverted}</p>
-                <p className="text-xs text-muted-foreground">Bilder</p>
+          <div className="divide-y divide-[var(--ms-hairline)] border-y border-[var(--ms-hairline)]">
+            {[
+              { icon: ImageFormatIcon, label: "Bilder", value: stats.imagesConverted },
+              { icon: VideoTimelineIcon, label: "Videos", value: stats.videosConverted },
+              { icon: BatchFilesIcon, label: "PDFs", value: stats.pdfsConverted },
+              { icon: RenameSparkIcon, label: "KI-Namen", value: stats.aiRenamesUsed },
+            ].map(({ icon: Icon, label, value }) => (
+              <div key={label} className="flex items-center justify-between gap-4 py-3">
+                <span className="flex items-center gap-3 text-sm font-medium">
+                  <Icon className="h-4 w-4 text-accent" />
+                  {label}
+                </span>
+                <span className="text-lg font-semibold">{value}</span>
               </div>
+            ))}
+          </div>
 
-              <div className="rounded-lg bg-card border border-border p-3 text-center">
-                <div className="flex justify-center mb-2">
-                  <div className="rounded-full bg-accent/10 p-2">
-                    <VideoTimelineIcon className="h-4 w-4 text-accent-foreground" />
-                  </div>
-                </div>
-                <p className="text-2xl font-semibold">{stats.videosConverted}</p>
-                <p className="text-xs text-muted-foreground">Videos</p>
-              </div>
-
-              <div className="rounded-lg bg-card border border-border p-3 text-center">
-                <div className="flex justify-center mb-2">
-                  <div className="rounded-full bg-primary/10 p-2">
-                    <BatchFilesIcon className="h-4 w-4 text-primary" />
-                  </div>
-                </div>
-                <p className="text-2xl font-semibold">{stats.pdfsConverted}</p>
-                <p className="text-xs text-muted-foreground">PDFs</p>
-              </div>
-
-              <div className="rounded-lg bg-card border border-border p-3 text-center">
-                <div className="flex justify-center mb-2">
-                  <div className="rounded-full bg-primary/10 p-2">
-                    <RenameSparkIcon className="h-4 w-4 text-primary" />
-                  </div>
-                </div>
-                <p className="text-2xl font-semibold">{stats.aiRenamesUsed}</p>
-                <p className="text-xs text-muted-foreground">KI-Renames</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              Keine Server-Statistik. Keine Nutzerprofile.
-            </p>
+          <p className="ms-note mt-4">
+            Keine Server-Statistik. Keine Nutzerprofile.
+          </p>
         </div>
       </DialogContent>
     </Dialog>

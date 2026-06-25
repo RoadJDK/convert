@@ -43,22 +43,22 @@ export const ResizeControls = ({
   const aspectHeightInputId = useId();
 
   return (
-    <div className="h-fit space-y-3 rounded-lg border bg-card p-2 sm:p-3">
+    <div className="h-fit space-y-4">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Zielgröße</span>
+        <span className="text-sm font-medium">Zielgrösse</span>
         <Button
           variant="ghost"
           size="sm"
           onClick={onResetDimensions}
-          className="h-7 gap-1 text-xs"
+          className="h-9 gap-1 text-xs"
         >
           <ResetFrameIcon className="h-3 w-3" />
           Zurücksetzen
         </Button>
       </div>
 
-      <div className="space-y-2">
-        <Label className="text-sm">Größe (px)</Label>
+      <div className="space-y-2 border-y border-[var(--ms-hairline)] py-3">
+        <Label className="text-sm">Grösse (px)</Label>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label htmlFor={widthInputId} className="text-xs">Breite</Label>
@@ -81,14 +81,14 @@ export const ResizeControls = ({
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2 border-b border-[var(--ms-hairline)] pb-3">
         <div className="flex items-center justify-between">
           <Label className="text-xs">Seitenverhältnis</Label>
           <Button
             variant="ghost"
             size="sm"
             onClick={onToggleAspectLock}
-            className={aspectLocked ? "h-6 px-2 text-primary" : "h-6 px-2 text-muted-foreground"}
+            className={aspectLocked ? "h-9 w-9 p-0 text-primary" : "h-9 w-9 p-0 text-muted-foreground"}
             title={aspectLocked ? "Verhältnis gelinkt" : "Verhältnis frei"}
           >
             {aspectLocked ? <LinkRatioIcon className="h-3 w-3" /> : <UnlinkRatioIcon className="h-3 w-3" />}
@@ -102,7 +102,7 @@ export const ResizeControls = ({
             value={aspectWidth || ""}
             onChange={(event) => onAspectWidthChange(event.target.value)}
             placeholder="16"
-            className="h-8 w-16 text-center text-sm"
+            className="h-9 w-16 text-center text-sm"
             min={1}
           />
           <span className="font-medium text-muted-foreground">:</span>
@@ -113,7 +113,7 @@ export const ResizeControls = ({
             value={aspectHeight || ""}
             onChange={(event) => onAspectHeightChange(event.target.value)}
             placeholder="9"
-            className="h-8 w-16 text-center text-sm"
+            className="h-9 w-16 text-center text-sm"
             min={1}
           />
           <span className="ml-2 text-xs text-muted-foreground">
@@ -122,9 +122,9 @@ export const ResizeControls = ({
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2 border-b border-[var(--ms-hairline)] pb-3">
         <div className="flex items-center justify-between">
-          <Label className="text-sm">Crop an Ziel-Verhältnis</Label>
+          <Label className="text-sm">Ausschnitt an Ziel-Verhältnis</Label>
           <Button
             variant={cropAspectLocked ? "default" : "outline"}
             size="sm"
@@ -133,9 +133,6 @@ export const ResizeControls = ({
             {cropAspectLocked ? "An" : "Aus"}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Wenn „An", wird das Crop-Tool auf das Verhältnis deiner Zielgröße gesperrt.
-        </p>
       </div>
 
       <p className="text-xs text-muted-foreground">

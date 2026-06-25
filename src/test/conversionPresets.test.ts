@@ -9,7 +9,7 @@ describe("conversion presets", () => {
 
     expect(webSmall).toMatchObject({
       id: "image-web-small",
-      label: "Web klein",
+      label: "E-Mail/Web",
       fileType: "image",
       settings: {
         mode: "percentage",

@@ -134,18 +134,18 @@ export const SUPPORTED_VIDEO_MIME_TYPES = VIDEO_CAPABILITIES.flatMap((format) =>
 export const SUPPORTED_PDF_MIME_TYPES = PDF_CAPABILITIES.flatMap((format) => format.mimeTypes);
 
 export const IMAGE_OUTPUT_OPTIONS: readonly OutputFormatOption<ImageOutputFormat>[] = [
-  { value: "webp", label: "WebP", extension: "webp", mimeType: "image/webp" },
-  { value: "jpeg", label: "JPEG", extension: "jpg", mimeType: "image/jpeg" },
-  { value: "png", label: "PNG", extension: "png", mimeType: "image/png" },
-  { value: "avif", label: "AVIF", extension: "avif", mimeType: "image/avif" },
-  { value: "gif", label: "GIF", extension: "gif", mimeType: "image/gif" },
-  { value: "bmp", label: "BMP", extension: "bmp", mimeType: "image/bmp" },
-  { value: "svg", label: "SVG", extension: "svg", mimeType: "image/svg+xml" },
+  { value: "webp", label: "klein fürs Web", extension: "webp", mimeType: "image/webp" },
+  { value: "jpeg", label: "kompatibel", extension: "jpg", mimeType: "image/jpeg" },
+  { value: "png", label: "verlustfrei", extension: "png", mimeType: "image/png" },
+  { value: "avif", label: "sehr klein", extension: "avif", mimeType: "image/avif" },
+  { value: "gif", label: "Animation", extension: "gif", mimeType: "image/gif" },
+  { value: "bmp", label: "unkomprimiert", extension: "bmp", mimeType: "image/bmp" },
+  { value: "svg", label: "Vektor", extension: "svg", mimeType: "image/svg+xml" },
 ] as const;
 
 export const VIDEO_OUTPUT_OPTIONS: readonly OutputFormatOption<VideoOutputFormat>[] = [
-  { value: "webm", label: "WebM", extension: "webm", mimeType: "video/webm" },
-  { value: "mp4", label: "MP4", extension: "mp4", mimeType: "video/mp4" },
+  { value: "webm", label: "klein fürs Web", extension: "webm", mimeType: "video/webm" },
+  { value: "mp4", label: "kompatibel", extension: "mp4", mimeType: "video/mp4" },
 ] as const;
 
 export const PDF_OUTPUT_OPTIONS: readonly OutputFormatOption<PdfOutputFormat>[] = [

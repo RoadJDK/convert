@@ -135,40 +135,29 @@ export const QualitySettings = ({
           size="sm"
           variant="ghost"
           disabled={disabled}
-          aria-label="Qualitätseinstellungen"
-          title="Qualitätseinstellungen"
-          className="h-11 w-11 p-0 text-muted-foreground hover:text-foreground sm:h-8 sm:w-8"
+          aria-label="Grösse und Qualität"
+          title="Grösse und Qualität"
+          className="ms-icon-button h-11 w-11 p-0 sm:h-[39px] sm:w-[39px]"
         >
           <SettingsSlidersIcon className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 bg-popover border border-border shadow-lg z-50" align="end">
+      <PopoverContent
+        data-quality-popover
+        className="z-50 max-h-[min(24rem,calc(100dvh_-_96px))] w-[min(23rem,calc(100vw_-_32px))] overflow-y-auto border border-[var(--ms-hairline)] bg-popover p-4 shadow-[var(--ms-shadow-panel)] max-sm:!fixed max-sm:!bottom-4 max-sm:!left-4 max-sm:!right-4 max-sm:!top-auto max-sm:!w-auto max-sm:!translate-x-0 max-sm:!translate-y-0"
+        align="end"
+        collisionPadding={16}
+        side="bottom"
+        sideOffset={8}
+      >
         <div className="space-y-4">
-          <h4 className="font-medium text-sm">Qualitätseinstellungen</h4>
-
-          {presets.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Presets</p>
-              <div className="grid grid-cols-2 gap-2">
-                {presets.map((preset) => (
-                  <Button
-                    key={preset.id}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs"
-                    title={preset.description}
-                    onClick={() => onChange(applyConversionPreset(settings, preset))}
-                  >
-                    {preset.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
+          <div>
+            <span className="ms-chip ms-chip-accent">Qualität</span>
+            <h4 className="mt-2 text-sm font-medium">Für Upload oder E-Mail</h4>
+          </div>
 
           {supportsRemovalControls && ((supportsBackgroundRemoval && onRemoveBackgroundChange) || onRemoveWatermarkChange) && (
-            <div className="space-y-2 rounded-lg border border-border bg-secondary/30 p-3">
+            <div className="space-y-3 border-y border-[var(--ms-hairline)] py-3">
               <p className="text-xs leading-relaxed text-muted-foreground">
                 {fileType === 'video'
                   ? "Nur für eigene Videos. Alles läuft lokal; das Original bleibt unverändert."
@@ -177,7 +166,7 @@ export const QualitySettings = ({
               {supportsBackgroundRemoval && onRemoveBackgroundChange && (
                 <div className="space-y-1">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
                       <EraserMaskIcon className="h-4 w-4 text-muted-foreground" />
                       <Label htmlFor={backgroundRemovalId} className="text-xs font-medium">
                         {backgroundRemovalPlan.uiLabel}
@@ -193,12 +182,15 @@ export const QualitySettings = ({
                   <p id={backgroundRemovalDescriptionId} className="text-xs leading-relaxed text-muted-foreground">
                     {backgroundRemovalPlan.uiDescription}
                   </p>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Wenn Modell-Assets nicht im App-Bundle liegen, können nur diese Assets nachgeladen werden. Deine Datei wird nicht hochgeladen.
+                  </p>
                 </div>
               )}
               {onRemoveWatermarkChange && (
                 <div className="space-y-1">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
                       <WatermarkCleanIcon className="h-4 w-4 text-muted-foreground" />
                       <Label htmlFor={watermarkRemovalId} className="text-xs font-medium">
                         {watermarkRemovalPlan.uiLabel}
@@ -213,7 +205,7 @@ export const QualitySettings = ({
                   </div>
                   <p id={watermarkRemovalDescriptionId} className="text-xs leading-relaxed text-muted-foreground">
                     {fileType === 'video'
-                      ? "Lokale Frame-Masken-Bereinigung im degradierten Exportpfad, keine vollständige Entfernungsgarantie."
+                      ? "Markierter Bereich wird beim lokalen Export grob bereinigt. Keine vollständige Entfernungsgarantie."
                       : watermarkRemovalPlan.uiDescription}
                   </p>
                   {onCleanupAreaClick && (
@@ -221,17 +213,38 @@ export const QualitySettings = ({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 w-full text-xs"
+                      className="h-9 w-full text-xs"
                       onClick={() => {
                         setOpen(false);
                         onCleanupAreaClick();
                       }}
                     >
-                      {cleanupArea || cleanupMask ? "Maske ändern" : "Bereich wählen"}
+                        {cleanupArea || cleanupMask ? "Bereich ändern" : "Bereich wählen"}
                     </Button>
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {presets.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Schnellauswahl</p>
+              <div className="grid grid-cols-2 gap-2">
+                {presets.map((preset) => (
+                  <Button
+                    key={preset.id}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 text-xs"
+                    title={preset.description}
+                    onClick={() => onChange(applyConversionPreset(settings, preset))}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
             </div>
           )}
           
@@ -239,11 +252,11 @@ export const QualitySettings = ({
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="percentage" className="gap-1.5 text-xs">
                 <PercentBadgeIcon className="h-3 w-3" />
-                Prozent
+                Qualität
               </TabsTrigger>
               <TabsTrigger value="maxSize" className="gap-1.5 text-xs">
                 <MaxSizeIcon className="h-3 w-3" />
-                Max Größe
+                Zielgrösse
               </TabsTrigger>
             </TabsList>
             
@@ -261,17 +274,17 @@ export const QualitySettings = ({
                 className="w-full"
               />
               <p className="text-xs text-muted-foreground">
-                100% = Standard • 200% = Maximum
+                100% = Standard, 200% = Maximum
               </p>
               <div className="flex items-center justify-between gap-3 pt-2">
-                <Label className="text-xs">Skalierung</Label>
+                <Label className="text-xs">Bildgrösse</Label>
                 <div className="flex items-center gap-1">
                   <Input
-                    aria-label="Skalierung"
+                    aria-label="Bildgrösse"
                     type="number"
                     value={settings.scale}
                     onChange={(event) => handleScaleInputChange(event.target.value)}
-                    className="h-8 w-16 text-sm"
+                    className="h-9 w-16 text-sm"
                     min={10}
                     max={200}
                   />
@@ -288,26 +301,26 @@ export const QualitySettings = ({
                 data-testid="scale-slider"
               />
               {estimatedSize && originalSize && (
-                <p className="text-xs text-primary font-medium">
-                  Geschätzte Größe: ~{formatFileSize(estimatedSize)} ({Math.round((estimatedSize / originalSize) * 100)}% der Originalgröße)
+                <p className="text-xs font-medium text-accent">
+                  ~{formatFileSize(estimatedSize)} ({Math.round((estimatedSize / originalSize) * 100)}%)
                 </p>
               )}
             </TabsContent>
             
             <TabsContent value="maxSize" className="mt-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Label className="text-xs whitespace-nowrap">Max Größe</Label>
+                <Label className="whitespace-nowrap text-xs">Zielgrösse</Label>
                 <Input
                   type="number"
                   value={settings.maxSizeKB}
                   onChange={(e) => handleMaxSizeChange(e.target.value)}
-                  className="h-8 text-sm"
+                  className="h-9 text-sm"
                   min={10}
                 />
                 <span className="text-xs text-muted-foreground">KB</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Qualität wird automatisch angepasst um die Zielgröße zu erreichen
+                Qualität wird automatisch angepasst, um die Zielgrösse zu erreichen.
               </p>
             </TabsContent>
           </Tabs>

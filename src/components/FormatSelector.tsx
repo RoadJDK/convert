@@ -27,14 +27,14 @@ export const FormatSelector = ({ fileType, currentFormat, onChange, disabled }: 
       disabled={disabled}
     >
       <SelectTrigger
-        aria-label="Zielformat"
-        className="h-11 w-[74px] border-0 bg-secondary/50 px-2 text-xs hover:bg-secondary sm:h-8 sm:w-[70px]"
+        aria-label="Format ändern"
+        className="h-11 w-[74px] border-input bg-card px-2 text-xs hover:border-ring sm:h-[39px] sm:w-[76px]"
       >
         <SelectValue>
           <span className="font-mono">.{extension}</span>
         </SelectValue>
       </SelectTrigger>
-      <SelectContent className="bg-popover border border-border shadow-lg z-50">
+      <SelectContent className="z-50 border border-border bg-popover shadow-[var(--ms-shadow-panel)]">
         {formatOptions.map((fmt) => (
           <SelectItem key={fmt.value} value={fmt.value} className="text-xs">
             <span className="font-mono">.{getOutputExtension(fileType, fmt.value)}</span>

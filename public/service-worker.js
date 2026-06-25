@@ -1,4 +1,4 @@
-const CACHE_VERSION = "maibach-convert-shell-v1";
+const CACHE_VERSION = "maibach-convert-shell-v3";
 const CORE_ASSETS = [
   "/",
   "/offline.html",
@@ -6,8 +6,8 @@ const CORE_ASSETS = [
   "/favicon.svg",
   "/favicon.png",
   "/apple-touch-icon.png",
-  "/assets/logo-mark-white.svg",
-  "/assets/logo-full-white.svg",
+  "/assets/logo-mark.svg",
+  "/assets/logo-full.svg",
 ];
 
 self.addEventListener("install", (event) => {
@@ -16,6 +16,12 @@ self.addEventListener("install", (event) => {
       .then((cache) => cache.addAll(CORE_ASSETS))
       .then(() => self.skipWaiting()),
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (event) => {
@@ -42,6 +48,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (url.pathname === "/service-worker.js") {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   if (request.destination === "document") {
     event.respondWith(handleDocumentRequest(request));
     return;
@@ -64,11 +75,6 @@ async function handleDocumentRequest(request) {
 }
 
 async function handleAssetRequest(request) {
-  const cached = await caches.match(request);
-  if (cached) {
-    return cached;
-  }
-
   try {
     const response = await fetch(request);
     if (response.ok) {
@@ -77,6 +83,6 @@ async function handleAssetRequest(request) {
     }
     return response;
   } catch {
-    return new Response("", { status: 504, statusText: "Offline" });
+    return (await caches.match(request)) ?? new Response("", { status: 504, statusText: "Offline" });
   }
 }
